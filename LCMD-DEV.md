@@ -5,7 +5,7 @@
 
 - 主程序仓库：WenZoo1982/lcmd
 - 知识库仓库：WenZoo1982/lcmd-kb（规划中，尚未创建）
-- 当前阶段：P1 主程序基础框架（P1.1、P1.2 已完成，下一步 P1.3 路径系统）
+- 当前阶段：P1 主程序基础框架（P1.1、P1.2、P1.3 已完成，下一步 P1.4 CLI 与整体验收）
 
 ---
 
@@ -330,7 +330,7 @@ CLI 只接收输入、分发业务并展示结果；核心模块负责业务逻�
 
 ### P1 实际项目结构
 
-P1 的目标结构按阶段逐步建立。以下列出截至 P1.2 已实际创建并纳入 Git 的文件；P1.3 路径模块尚未创建。
+P1 的目标结构按阶段逐步建立。以下列出截至 P1.3 已实际创建并纳入 Git 的文件。
 
 ```text
 lcmd/
@@ -348,7 +348,8 @@ lcmd/
 │       │   └── app.py
 │       ├── core/
 │       │   ├── __init__.py
-│       │   └── config.py
+│       │   ├── config.py
+│       │   └── paths.py
 │       └── output/
 │           ├── __init__.py
 │           └── renderer.py
@@ -362,6 +363,7 @@ lcmd/
 | main.py、__main__.py | 程序入口及 python -m lcmd 启动 |
 | cli/app.py | Typer 应用创建和 CLI 命令注册 |
 | core/config.py | 用户配置读取、校验和保存 |
+| core/paths.py | 默认知识库路径、环境变量覆盖、根目录验证及平台语言目录推导 |
 | output/renderer.py | Rich 终端输出统一处理 |
 | tests/test_cli.py、test_config.py | CLI 与配置模块自动化测试 |
 
@@ -371,7 +373,8 @@ lcmd/
 - `python -m lcmd` 可启动。
 - 首次运行可创建默认配置；配置格式错误或字段值无效时给出明确错误。
 - 正确计算 Windows、Linux、macOS 的默认路径。
-- 支持 `LCMD_KNOWLEDGE_DIR` 覆盖知识库根目录。
+- 支持 `LCMD_KNOWLEDGE_DIR` 覆盖知识库根目录，拒绝空值并解析相对路径。
+- 验证知识库根目录存在且为目录；按配置推导 commands、tasks 平台语言目录，不自动创建目录。
 - 错误提示清楚，不无故输出内部堆栈。
 - pytest 全部通过，Ruff lint 和 format 检查通过。
 
@@ -379,7 +382,7 @@ lcmd/
 
 1. P1.1 项目骨架：目录、项目元数据、依赖、入口和开发工具配置。
 2. P1.2 配置系统：TOML 读取、默认配置、校验和保存。
-3. P1.3 路径系统：跨平台路径和环境变量覆盖。
+3. P1.3 路径系统：跨平台路径和环境变量覆盖。**已完成。**
 4. P1.4 CLI 与验收：帮助、版本、错误处理和自动化测试。
 
 每个子阶段完成后检查代码、测试结果和 Git 状态，再继续下一阶段。
@@ -410,7 +413,7 @@ lcmd/
 
 **P0 — 项目规划与架构整理：已完成。**
 
-**P1 — 主程序基础框架：进行中。** P1.1 项目骨架和 P1.2 配置系统已完成并推送至 GitHub；下一步为 P1.3 路径系统。P1.4 CLI 与整体验收尚未开始。
+**P1 — 主程序基础框架：进行中。** P1.1 项目骨架、P1.2 配置系统和 P1.3 路径系统均已完成并推送至 GitHub；下一步为 P1.4 CLI 与整体验收。
 
 **正式项目重置：已完成。** 本地与 GitHub `main` 已同步到全新根提交 `538a922`（`chore: initialize clean LCMD project`），该提交只包含 `LCMD-DEV.md`。本地工作区干净；旧演示工程、虚拟环境、缓存和旧 Git 历史已从本地及新的 `main` 历史中清除。
 
@@ -431,6 +434,7 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - [x] 确认 P1 技术方案：Python 最低支持 3.11，当前使用 3.14.10；Typer、Rich、platformdirs；标准库 tomllib；setuptools；pytest、Ruff。
 - [x] 确认 P1 最小项目结构和 P1.1—P1.4 子阶段。
 - [x] 明确 P1.2 配置系统设计：使用 platformdirs 定位配置文件；TOML 保存 platform、language；首次运行创建默认配置；非法配置明确报错；保存采用同目录临时文件和原子替换。
+- [x] 明确 P1.3 路径系统设计：默认数据目录、`LCMD_KNOWLEDGE_DIR` 覆盖、空值报错、相对路径解析、根目录验证，以及 commands/tasks 平台语言路径推导。
 
 ### 原始仓库基线（2026-10-31，重置前）
 
@@ -466,10 +470,14 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - [x] 新增 `tests/test_config.py`，覆盖配置路径、Windows/Linux/macOS 默认平台、首次创建、读取、保存、损坏 TOML、缺失字段、错误类型和非法值，以及非法保存保护已有文件。
 - [x] P1.2 完整测试：`22 passed`；Ruff lint 全部通过；Ruff format 检查 13 个文件全部通过；`git diff --check` 通过。
 - [x] P1.2 代码提交 `4d046aa`（`feat: add user configuration management`）已推送；本地 `main` 与 `origin/main` 同步，工作区干净。
+- [x] P1.3：新增 `src/lcmd/core/paths.py`，实现 `get_default_knowledge_dir()`、`get_knowledge_root()`、`validate_knowledge_root()`、`get_knowledge_dirs()`，以及 `PathError`、`KnowledgeDirs`。
+- [x] P1.3 测试覆盖默认路径、环境变量覆盖、空值/空白值、相对路径解析、根目录有效性和错误、配置目录推导及不自动创建目录。
+- [x] P1.3 全量 pytest：`34 passed`（其中路径模块 12 项）；Ruff lint：`All checks passed!`；Ruff format：`15 files already formatted`；`git diff --check` 通过；两个新增文件均为 UTF-8 无 BOM。
+- [x] P1.3 代码提交 `43adf36`（`feat: add knowledge base path management`）已推送至 GitHub `main`。
 
 ### 下一步
 
-进入 P1.3：实现跨平台路径系统，包括默认知识库根目录、`LCMD_KNOWLEDGE_DIR` 环境变量覆盖、平台与语言子目录推导，以及路径不存在和无效路径的明确错误处理。仅实现路径层，不提前加入知识库清单检查或 CLI 平台/语言切换。
+进入 P1.4：核对 CLI 现有实现与产品规划，完成帮助、版本和错误处理的验收；补齐必要测试，确保 CLI 在配置和知识库不可用等场景下给出清晰提示。仅处理 P1.4 范围，不提前实现知识库解析、查询或更新功能。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
