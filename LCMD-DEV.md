@@ -5,7 +5,7 @@
 
 - 主程序仓库：WenZoo1982/lcmd
 - 知识库仓库：WenZoo1982/lcmd-kb（规划中，尚未创建）
-- 当前阶段：P2 知识库解析与管理（P1.1—P1.4 已完成，下一步确定 Schema 并实现 TOML Front Matter / Markdown 解析）
+- 当前阶段：P2 知识库解析与管理（P1.1—P1.4、P2.1—P2.3 已完成；下一步实现 P2.4 Knowledge Loader）
 
 ---
 
@@ -434,7 +434,7 @@ lcmd/
 
 **P1 — 主程序基础框架：已完成。** P1.1—P1.4 均已完成并推送至 GitHub。P1.4 完成 CLI 初始化接入、错误处理和自动化测试。
 
-**P2 — 知识库解析与管理：进行中。** P2.1 Schema 设计基线已确认。P2.2 Front Matter 解析器已在本地完成并通过验收；P2.3 Validator 和 P2.4 Loader 尚未开始。
+**P2 — 知识库解析与管理：进行中。** P2.1 Schema 设计基线已确认；P2.2 Front Matter Parser、P2.3 Schema Validator 均已在本地完成并通过验收，代码尚未提交。P2.4 Knowledge Loader 尚未开始。
 
 **正式项目重置：已完成。** 本地与 GitHub `main` 已同步到全新根提交 `538a922`（`chore: initialize clean LCMD project`），该提交只包含 `LCMD-DEV.md`。本地工作区干净；旧演示工程、虚拟环境、缓存和旧 Git 历史已从本地及新的 `main` 历史中清除。
 
@@ -502,9 +502,17 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - [x] P1.4 全量 pytest：`37 passed`；Ruff lint：`All checks passed!`；Ruff format：`15 files already formatted`。实际 CLI `--help` 和 `--version` 验证通过；`git diff --check` 无空白错误（仅有 Windows Git LF/CRLF 提醒）。
 - [x] P1.4 代码提交 `3b5457b`（`feat: initialize CLI configuration and knowledge paths`）已推送至 GitHub `main`。
 
+### P2.2—P2.3 本地实现与验收记录
+
+- P2.2 Parser：新增 `src/lcmd/knowledge/__init__.py`、`src/lcmd/knowledge/parser.py` 和 `tests/test_parser.py`。实现 `ParsedDocument`、`DocumentParseError`、`parse_document()`；支持 LF/CRLF，解析 TOML Front Matter 并原样保留正文；缺失标记或 TOML 语法错误时报错。Parser 不执行 Schema 校验。
+- P2.2 验收：Parser 专项测试 12 项通过；当时全量 pytest `49 passed`；Ruff lint、format 和 `git diff --check` 均通过。代码尚未提交。
+- P2.3 Validator：新增 `src/lcmd/knowledge/validator.py` 和 `tests/test_validator.py`。实现 `DocumentValidationError`、`validate_document()`；分别校验 command/task 文档的允许字段、必填非空字符串 `summary`、非空正文；任务文档 `commands` 可选，缺省返回空数组，存在时要求为字符串数组；拒绝未定义字段。Validator 不扫描目录或解析命令引用。
+- P2.3 验收：Validator 专项测试 `20 passed`；全量 pytest `69 passed`；Ruff lint 通过；Ruff format 检查 `20 files already formatted`；`git diff --check` 通过。Validator 文件曾因 BOM/换行组合触发 Ruff 0.17.3 崩溃，统一为 UTF-8 无 BOM、LF 并格式化后已通过全项目检查。
+- P2.2/P2.3 代码当前仅在本地，尚未提交或推送；最后一次本地 `git status --short` 显示 `?? src/lcmd/knowledge/`、`?? tests/test_parser.py`、`?? tests/test_validator.py`。
+
 ### 下一步
 
-P2.1 第一版 Schema 设计基线已确认并记录。下一步进入 P2.2—P2.4 的实现规划与分步开发：先实现 TOML Front Matter / Markdown 解析，再实现 Schema Validator，最后实现知识库扫描加载和单文档错误隔离。每一步先核对本地 Git 状态和实际文件，再编写代码及测试。P2 验收时可根据实际结果微调 Schema。暂不实现命令查询、搜索或任务引用解析。
+进入 P2.4 Knowledge Loader。开始前先检查本地 Git 状态并保留 P2.2/P2.3 未跟踪文件；随后结合实际 Parser、Validator API 和知识库目录约定，先编写 Loader 测试，再实现文档发现、加载、错误隔离和诊断汇总。知识库级清单及兼容性错误应按 P2.1 约定处理。暂不实现命令查询、搜索或任务引用解析。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
