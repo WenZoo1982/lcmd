@@ -5,7 +5,7 @@
 
 - 主程序仓库：WenZoo1982/lcmd
 - 知识库仓库：WenZoo1982/lcmd-kb（规划中，尚未创建）
-- 当前阶段：P1 主程序基础框架（P1.1 已完成，下一步 P1.2 配置系统）
+- 当前阶段：P1 主程序基础框架（P1.1、P1.2 已完成，下一步 P1.3 路径系统）
 
 ---
 
@@ -330,7 +330,7 @@ CLI 只接收输入、分发业务并展示结果；核心模块负责业务逻�
 
 ### P1 实际项目结构
 
-P1 的目标结构按阶段逐步建立。以下仅列出 P1.1 已实际创建并纳入 Git 的文件；P1.2、P1.3 所需的配置和路径模块尚未创建。
+P1 的目标结构按阶段逐步建立。以下列出截至 P1.2 已实际创建并纳入 Git 的文件；P1.3 路径模块尚未创建。
 
 ```text
 lcmd/
@@ -405,7 +405,7 @@ lcmd/
 
 **P0 — 项目规划与架构整理：已完成。**
 
-**P1 — 主程序基础框架：进行中。** P1.1 项目骨架已完成并推送至 GitHub；下一步为 P1.2 配置系统。P1.3 路径系统和 P1.4 CLI 与整体验收尚未开始。
+**P1 — 主程序基础框架：进行中。** P1.1 项目骨架和 P1.2 配置系统已完成并推送至 GitHub；下一步为 P1.3 路径系统。P1.4 CLI 与整体验收尚未开始。
 
 **正式项目重置：已完成。** 本地与 GitHub `main` 已同步到全新根提交 `538a922`（`chore: initialize clean LCMD project`），该提交只包含 `LCMD-DEV.md`。本地工作区干净；旧演示工程、虚拟环境、缓存和旧 Git 历史已从本地及新的 `main` 历史中清除。
 
@@ -424,7 +424,7 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - [x] 决定清除原始演示工程，以最终产品架构为基础重新建立项目。
 - [x] 决定保留 GitHub 仓库和本总控文档，但重新初始化 Git 提交历史。
 - [x] 确认 P1 技术方案：Python 最低支持 3.11，当前使用 3.14.10；Typer、Rich、platformdirs；标准库 tomllib；setuptools；pytest、Ruff。
-- [x] 确认 P1 最小项目结构和 P1.1—P1.4 子阶段。
+- [x] 确认 P1 最小项目结构和 P1.1—P1.4 子阶段。\n- [x] 明确 P1.2 配置系统设计：使用 platformdirs 定位配置文件；TOML 保存 platform、language；首次运行创建默认配置；非法配置明确报错；保存采用同目录临时文件和原子替换。
 
 ### 原始仓库基线（2026-10-31，重置前）
 
@@ -454,11 +454,11 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - [x] 创建项目虚拟环境 `.venv`，使用 Python 3.14.10；安装运行和开发依赖。
 - [x] 验证 editable 安装成功，CLI `--help`、`--version`、`-v` 和 `python -m lcmd --version` 可用。
 - [x] pytest：`3 passed`；Ruff lint：`All checks passed!`；Ruff format：`10 files already formatted`。
-- [x] `git diff --cached --check` 通过；P1.1 代码提交 `a62d1ca`（`feat: add LCMD project skeleton and CLI foundation`）已推送，GitHub `main` 与本地 `main` 同步，工作区干净。
+- [x] `git diff --cached --check` 通过；P1.1 代码提交 `a62d1ca`（`feat: add LCMD project skeleton and CLI foundation`）已推送。\n- [x] P1.2 配置模块实现并提交：`4d046aa`（`feat: add user configuration management`），已推送至 GitHub `main`。\n- [x] P1.2 最终验收：pytest `22 passed`；Ruff lint 全部通过；Ruff format 检查 13 个文件全部通过；Git 差异检查通过。
 
 ### 下一步
 
-进入 P1.2：设计并实现 TOML 用户配置系统。先明确配置文件位置、首次运行默认配置、字段校验、错误处理和保存行为，再编写测试与实现；本阶段只处理配置，不提前实现 P1.3 路径系统。
+进入 P1.3：实现跨平台路径系统，包括默认知识库根目录、`LCMD_KNOWLEDGE_DIR` 环境变量覆盖、平台与语言子目录推导，以及路径不存在和无效路径的明确错误处理。仅实现路径层，不提前加入知识库清单检查或 CLI 平台/语言切换。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
