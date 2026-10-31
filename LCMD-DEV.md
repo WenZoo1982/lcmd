@@ -252,7 +252,7 @@ LCMD 始终只提供知识查询，不执行用户输入的系统命令。
 - 两者独立版本、独立 Release；统一通过 lcmd --update 检查。
 - 使用 SemVer 2.0.0；主程序和知识库独立版本。
 - 知识库 `manifest.json` 只记录 `version`。主程序版本和知识库版本均采用 SemVer，只比较 Major：Major 相同即可使用，Minor/Patch 更新知识库内容时不要求升级主程序；知识库 Major 低于主程序时必须更新知识库，高于主程序时必须升级主程序。主程序发布新 Major 时必须同步发布相同 Major 的知识库 Release。
-- 知识库 Release 提供完整 ZIP、`manifest.json`、`SHA256SUMS.txt`；清单包含知识库版本、平台列表及发布所需文件信息，哈希由实际文件计算。
+- 知识库 Release 提供完整 ZIP、`manifest.json`、`SHA256SUMS.txt`；`manifest.json` 只包含知识库 `version`，不记录平台列表；哈希由实际发布文件计算。
 - 发布清单使用私钥签名，客户端内置公钥验证；私钥不上传 GitHub。
 - 更新前显示更新日志、覆盖警告、磁盘空间需求和可用空间；不足则取消，不清理用户文件。
 - 下载、校验、构建、验证完成后再切换；失败组件保留旧版本并回滚。
@@ -332,7 +332,7 @@ lcmd/
 | cli/update.py | 更新命令入口 |
 | core/config.py | 用户配置读取、校验和保存 |
 | core/paths.py | 计算配置、知识库根目录及当前平台语言目录 |
-| core/knowledge.py | 清单读取、主程序与知识库 Major 版本兼容检查、知识文档发现和加载协调 |
+| knowledge/loader.py | 清单读取、主程序与知识库 Major 版本兼容检查、知识文档发现、解析、校验和加载诊断汇总 |
 | core/parser.py | TOML Front Matter 和 Markdown 解析 |
 | core/validator.py | Schema、元数据、文件名、引用、URL 校验 |
 | core/search_engine.py | 命令与任务内容检索、排序 |
@@ -546,9 +546,24 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - P2.3 验收：Validator 专项测试 `20 passed`；全量 pytest `69 passed`；Ruff lint 通过；Ruff format 检查 `20 files already formatted`；`git diff --check` 通过。Validator 文件曾因 BOM/换行组合触发 Ruff 0.17.3 崩溃，统一为 UTF-8 无 BOM、LF 并格式化后已通过全项目检查。
 - P2.2/P2.3 代码当前仅在本地，尚未提交或推送；最后一次本地 `git status --short` 显示 `?? src/lcmd/knowledge/`、`?? tests/test_parser.py`、`?? tests/test_validator.py`。
 
+### P2.4 Knowledge Loader 开发基线
+
+P2.4 开始前已核对本地 Parser、Validator、路径管理、配置和主程序版本定义。Loader 按以下规则实现：
+
+- 新增 `src/lcmd/knowledge/loader.py`，复用 `parser.py`、`validator.py`、`core/paths.py` 和 `AppConfig`；不重复实现路径计算、Front Matter 解析或文档 Schema 校验。
+- 主程序版本直接读取 `lcmd.__version__`（当前项目定义于 `src/lcmd/__init__.py`），不另建版本配置。
+- 知识库根目录必须存在且为目录；根目录下必须有可读取、格式正确的 `manifest.json`。
+- 第一版清单严格只允许 `version` 一个字段，值必须是有效 SemVer 版本字符串；缺失、未知字段、类型错误或版本格式错误均属于知识库级错误，终止加载。
+- 主程序版本与知识库版本只比较 Major 主版本号。Major 相同即兼容，Minor/Patch 不参与兼容性判断；知识库 Major 低于主程序时提示更新知识库，高于主程序时提示升级主程序。
+- 只扫描当前 `AppConfig` 指定的平台和语言目录，不扫描其他平台或语言目录。
+- 当前平台的命令目录和任务目录允许不存在或为空；这不属于知识库级错误。命令资料缺失时由后续查询明确提示未收录，不阻止知识库加载。
+- 单篇 Markdown 文件无法读取、Front Matter 解析失败或 Schema 校验失败时，跳过该文档并记录文件路径和原因；继续加载其他有效文档。
+- Loader 返回已加载的命令文档、任务文档和诊断信息。具体数据结构及函数签名以测试先行的实现为准。
+- P2.4 只实现清单检查、版本兼容检查、文档发现/加载和诊断汇总；不实现命令查询、搜索、任务引用解析或 CLI 接入。
+
 ### 下一步
 
-进入 P2.4 Knowledge Loader。开始前先检查本地 Git 状态并保留 P2.2/P2.3 未跟踪文件；随后结合实际 Parser、Validator API 和知识库目录约定，先编写 Loader 测试，再实现文档发现、加载、错误隔离和诊断汇总。知识库级清单及兼容性错误应按 P2.1 约定处理。暂不实现命令查询、搜索或任务引用解析。
+按上述基线创建 `tests/test_loader.py`，先编写清单、版本、目录缺失/为空、有效文档加载和单文档错误隔离测试，运行确认预期失败后再实现 Loader。开发前后保留并核对 P2.2/P2.3 未提交文件；通过完整 pytest、Ruff lint/format 和 `git diff --check` 验收后，再提交代码并更新本总控文档。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
