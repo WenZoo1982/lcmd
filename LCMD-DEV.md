@@ -5,7 +5,7 @@
 
 - 主程序仓库：WenZoo1982/lcmd
 - 知识库仓库：WenZoo1982/lcmd-kb（规划中，尚未创建）
-- 当前阶段：P1 主程序基础框架（P1.1、P1.2、P1.3 已完成，下一步 P1.4 CLI 与整体验收）
+- 当前阶段：P2 知识库解析与管理（P1.1—P1.4 已完成，下一步确定 Schema 并实现 TOML Front Matter / Markdown 解析）
 
 ---
 
@@ -171,7 +171,7 @@ language = "zh-CN"
 5. 调用相应知识加载、解析和查询模块。
 6. 将结果交给统一输出模块显示。
 
-CLI 每次执行都是独立进程，不应每次启动都无条件全量扫描、解析所有 Markdown。索引是否持久化由实际规模和性能测试决定。
+CLI 每次执行都是独立进程。当前实现仅在实际业务命令触发回调时读取配置、解析知识库根目录并验证根目录；`--help`、`--version` 和无参数帮助不执行该初始化。当前不启动后台服务，不扫描或解析 Markdown。索引是否持久化由实际规模和性能测试决定。
 
 ### 命令精确查询
 
@@ -330,7 +330,7 @@ CLI 只接收输入、分发业务并展示结果；核心模块负责业务逻�
 
 ### P1 实际项目结构
 
-P1 的目标结构按阶段逐步建立。以下列出截至 P1.3 已实际创建并纳入 Git 的文件。
+P1 的目标结构按阶段逐步建立。以下列出截至 P1.4 已实际创建并纳入 Git 的文件。
 
 ```text
 lcmd/
@@ -366,7 +366,7 @@ lcmd/
 | core/config.py | 用户配置读取、校验和保存 |
 | core/paths.py | 默认知识库路径、环境变量覆盖、根目录验证及平台语言目录推导 |
 | output/renderer.py | Rich 终端输出统一处理 |
-| tests/test_cli.py、test_config.py | CLI 与配置模块自动化测试 |
+| tests/test_cli.py、test_config.py、test_paths.py | CLI、配置和路径模块自动化测试 |
 
 ### P1 验收要求
 
@@ -384,7 +384,7 @@ lcmd/
 1. P1.1 项目骨架：目录、项目元数据、依赖、入口和开发工具配置。
 2. P1.2 配置系统：TOML 读取、默认配置、校验和保存。
 3. P1.3 路径系统：跨平台路径和环境变量覆盖。**已完成。**
-4. P1.4 CLI 与验收：帮助、版本、错误处理和自动化测试。
+4. P1.4 CLI 与验收：帮助、版本、错误处理和自动化测试。**已完成。**
 
 每个子阶段完成后检查代码、测试结果和 Git 状态，再继续下一阶段。
 
@@ -414,7 +414,7 @@ lcmd/
 
 **P0 — 项目规划与架构整理：已完成。**
 
-**P1 — 主程序基础框架：进行中。** P1.1 项目骨架、P1.2 配置系统和 P1.3 路径系统均已完成并推送至 GitHub；下一步为 P1.4 CLI 与整体验收。
+**P1 — 主程序基础框架：已完成。** P1.1—P1.4 均已完成并推送至 GitHub。P1.4 完成 CLI 初始化接入、错误处理和自动化测试。下一阶段进入 P2 知识库解析与管理。
 
 **正式项目重置：已完成。** 本地与 GitHub `main` 已同步到全新根提交 `538a922`（`chore: initialize clean LCMD project`），该提交只包含 `LCMD-DEV.md`。本地工作区干净；旧演示工程、虚拟环境、缓存和旧 Git 历史已从本地及新的 `main` 历史中清除。
 
@@ -436,6 +436,7 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - [x] 确认 P1 最小项目结构和 P1.1—P1.4 子阶段。
 - [x] 明确 P1.2 配置系统设计：使用 platformdirs 定位配置文件；TOML 保存 platform、language；首次运行创建默认配置；非法配置明确报错；保存采用同目录临时文件和原子替换。
 - [x] 明确 P1.3 路径系统设计：默认数据目录、`LCMD_KNOWLEDGE_DIR` 覆盖、空值报错、相对路径解析、根目录验证，以及 commands/tasks 平台语言路径推导。
+- [x] 明确 P1.4 CLI 初始化规则：实际业务命令触发时读取配置、解析并验证知识库根目录；帮助、版本和无参数帮助不依赖知识库。
 
 ### 原始仓库基线（2026-10-31，重置前）
 
@@ -446,7 +447,8 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - 项目曾以仅包含 `LCMD-DEV.md` 的根提交 `538a922` 重新初始化，作为正式开发起点。
 - P1.1 项目骨架提交 `a62d1ca` 已推送到 GitHub `main`。
 - P1.2 配置系统提交 `4d046aa` 已推送到 GitHub `main`。
-- P1.3 代码提交 `43adf36` 已推送至 GitHub `main`；总控文档更新提交 `05c9da3` 已验证。用户随后需将该文档提交拉取到本地。
+- P1.3 代码提交 `43adf36` 已推送至 GitHub `main`；总控文档更新提交 `05c9da3` 已验证。
+- P1.4 代码提交 `3b5457b`（`feat: initialize CLI configuration and knowledge paths`）已推送至 GitHub `main`。
 - GitHub 仓库本身保留，未删除或重建；知识库仓库 `WenZoo1982/lcmd-kb` 仍未创建。
 
 ### 当前执行状态
@@ -475,10 +477,14 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - [x] P1.3 测试覆盖默认路径、环境变量覆盖、空值/空白值、相对路径解析、根目录有效性和错误、配置目录推导及不自动创建目录。
 - [x] P1.3 全量 pytest：`34 passed`（其中路径模块 12 项）；Ruff lint：`All checks passed!`；Ruff format：`15 files already formatted`；`git diff --check` 通过；两个新增文件均为 UTF-8 无 BOM。
 - [x] P1.3 代码提交 `43adf36`（`feat: add knowledge base path management`）已推送至 GitHub `main`。
+- [x] P1.4：`src/lcmd/cli/app.py` 接入配置读取、知识库目录推导和根目录验证；捕获 `ConfigError`、`PathError`，通过统一错误输出并以退出码 1 退出。帮助、版本和无参数帮助保持可用，不执行知识库初始化。
+- [x] P1.4 自动化测试：CLI 帮助、版本、短版本、初始化成功、配置异常、知识库根目录验证异常；CLI 专项测试 `6 passed`。
+- [x] P1.4 全量 pytest：`37 passed`；Ruff lint：`All checks passed!`；Ruff format：`15 files already formatted`。实际 CLI `--help` 和 `--version` 验证通过；`git diff --check` 无空白错误（仅有 Windows Git LF/CRLF 提醒）。
+- [x] P1.4 代码提交 `3b5457b`（`feat: initialize CLI configuration and knowledge paths`）已推送至 GitHub `main`。
 
 ### 下一步
 
-进入 P1.4：核对 CLI 现有实现与产品规划，完成帮助、版本和错误处理的验收；补齐必要测试，确保 CLI 在配置和知识库不可用等场景下给出清晰提示。仅处理 P1.4 范围，不提前实现知识库解析、查询或更新功能。
+进入 P2：先确定知识库 Schema、TOML Front Matter 与 Markdown 正文的解析边界、错误模型及单文档错误隔离策略，再实现解析模块和对应测试。不要在 Schema 未确认前编写正式知识文档或提前实现命令查询。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
