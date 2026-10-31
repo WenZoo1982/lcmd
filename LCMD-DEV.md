@@ -5,7 +5,7 @@
 
 - 主程序仓库：WenZoo1982/lcmd
 - 知识库仓库：WenZoo1982/lcmd-kb（规划中，尚未创建）
-- 当前阶段：P1 主程序基础框架（P1.1 已完成，下一步 P1.2）
+- 当前阶段：P1 主程序基础框架（P1.1 已完成，下一步 P1.2 配置系统）
 
 ---
 
@@ -330,7 +330,7 @@ CLI 只接收输入、分发业务并展示结果；核心模块负责业务逻�
 
 ### P1 实际项目结构
 
-P1 的目标结构按阶段逐步建立。P1.1 已实际创建的文件如下；尚未实现的 `core/config.py`、`core/paths.py` 等文件不提前创建。
+P1 的目标结构按阶段逐步建立。以下仅列出 P1.1 已实际创建并纳入 Git 的文件；P1.2、P1.3 所需的配置和路径模块尚未创建。
 
 ```text
 lcmd/
@@ -346,26 +346,17 @@ lcmd/
 │       ├── cli/
 │       │   ├── __init__.py
 │       │   └── app.py
-│       ├── core/
-│       │   ├── __init__.py
-│       │   ├── config.py
-│       │   └── paths.py
 │       └── output/
 │           ├── __init__.py
 │           └── renderer.py
 └── tests/
-    ├── conftest.py
-    ├── test_cli.py
-    ├── test_config.py
-    └── test_paths.py
+    └── test_cli.py
 ```
 
 | 模块 | 职责 |
 |---|---|
 | main.py、__main__.py | 程序入口及 python -m lcmd 启动 |
 | cli/app.py | Typer 应用创建和 CLI 命令注册 |
-| core/config.py | TOML 配置读取、默认值、校验和保存 |
-| core/paths.py | 配置目录、知识库目录及平台路径计算 |
 | output/renderer.py | Rich 终端输出统一处理 |
 | tests/ | P1 模块自动化测试 |
 
@@ -414,7 +405,7 @@ lcmd/
 
 **P0 — 项目规划与架构整理：已完成。**
 
-**P1 — 主程序基础框架：进行中。** P1.1 项目骨架已完成并推送；P1.2 配置系统、P1.3 路径系统、P1.4 CLI 与整体验收尚未开始。
+**P1 — 主程序基础框架：进行中。** P1.1 项目骨架已完成并推送至 GitHub；下一步为 P1.2 配置系统。P1.3 路径系统和 P1.4 CLI 与整体验收尚未开始。
 
 **正式项目重置：已完成。** 本地与 GitHub `main` 已同步到全新根提交 `538a922`（`chore: initialize clean LCMD project`），该提交只包含 `LCMD-DEV.md`。本地工作区干净；旧演示工程、虚拟环境、缓存和旧 Git 历史已从本地及新的 `main` 历史中清除。
 
@@ -439,12 +430,11 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 
 原始仓库只有初始 Python/Typer 演示骨架：pyproject.toml、src/lcmd/cli.py、src/lcmd/__init__.py、tests/test_cli.py、.gitignore、.gitattributes。CLI 只有 hello 示例；三个 pytest 测试通过，Ruff 检查和格式检查通过。该代码不包含正式 LCMD 业务功能，已决定全部清除，不作为后续架构或实现依据。
 
-### 正式项目重置结果
+### 正式项目重置结果（历史记录）
 
-- 本地 `D:\Project_DEV\lcmd` 仅保留本文件 `LCMD-DEV.md`。
-- 本地 Git 已重新初始化，默认分支为 `main`。
-- GitHub `WenZoo1982/lcmd` 的 `main` 已由新历史覆盖；新根提交为 `538a922`，提交内容只有 `LCMD-DEV.md`。
-- 本地 `main` 与 `origin/main` 指向同一提交，工作区干净。
+- 项目曾以仅包含 `LCMD-DEV.md` 的根提交 `538a922` 重新初始化，作为正式开发起点。
+- 随后 P1.1 项目骨架提交 `a62d1ca` 已推送到 GitHub `main`。
+- 当前 GitHub `main` 已包含 P1.1 代码；本地最后一次核验显示 `main` 与 `origin/main` 指向 `a62d1ca`，工作区干净。
 - GitHub 仓库本身保留，未删除或重建；知识库仓库 `WenZoo1982/lcmd-kb` 仍未创建。
 
 ### 当前执行状态
@@ -460,11 +450,15 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - [x] 验证本地与 GitHub 的 `main` 指向同一提交，工作区干净。
 - [x] 核对 P1 开发环境：Python 3.14.10、Python 3.10、pip 26.2.2、Git 2.56.0.windows.2；确认项目目录仅有 .git 和 LCMD-DEV.md。
 - [x] 确认 P1 技术选型、最低 Python 版本、最小项目结构及验收标准。
-- [ ] P1.1：创建正式项目骨架和隔离的 Python 虚拟环境。
+- [x] P1.1：创建正式项目骨架、项目元数据、README、CLI 入口、Rich 输出模块及基础测试。
+- [x] 创建项目虚拟环境 `.venv`，使用 Python 3.14.10；安装运行和开发依赖。
+- [x] 验证 editable 安装成功，CLI `--help`、`--version`、`-v` 和 `python -m lcmd --version` 可用。
+- [x] pytest：`3 passed`；Ruff lint：`All checks passed!`；Ruff format：`10 files already formatted`。
+- [x] `git diff --cached --check` 通过；P1.1 代码提交 `a62d1ca`（`feat: add LCMD project skeleton and CLI foundation`）已推送，GitHub `main` 与本地 `main` 同步，工作区干净。
 
 ### 下一步
 
-继续 P1.1：根据第 6 节确定的技术方案建立项目骨架。先创建项目文件和虚拟环境，再安装依赖并验证 CLI 入口；不继承 hello 示例及其测试。
+进入 P1.2：设计并实现 TOML 用户配置系统。先明确配置文件位置、首次运行默认配置、字段校验、错误处理和保存行为，再编写测试与实现；本阶段只处理配置，不提前实现 P1.3 路径系统。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
