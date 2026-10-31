@@ -355,7 +355,8 @@ lcmd/
 │           └── renderer.py
 └── tests/
     ├── test_cli.py
-    └── test_config.py
+    ├── test_config.py
+    └── test_paths.py
 ```
 
 | 模块 | 职责 |
@@ -445,7 +446,7 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - 项目曾以仅包含 `LCMD-DEV.md` 的根提交 `538a922` 重新初始化，作为正式开发起点。
 - P1.1 项目骨架提交 `a62d1ca` 已推送到 GitHub `main`。
 - P1.2 配置系统提交 `4d046aa` 已推送到 GitHub `main`。
-- 当前 GitHub `main` 已包含 P1.1、P1.2 代码；2026-10-31 本地核验显示 `main` 与 `origin/main` 均指向 `4d046aa`，工作区干净。
+- P1.3 代码提交 `43adf36` 已推送至 GitHub `main`；总控文档更新提交 `05c9da3` 已验证。用户随后需将该文档提交拉取到本地。
 - GitHub 仓库本身保留，未删除或重建；知识库仓库 `WenZoo1982/lcmd-kb` 仍未创建。
 
 ### 当前执行状态
