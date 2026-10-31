@@ -3,6 +3,9 @@
 import typer
 
 from lcmd import __version__
+from lcmd.core.config import ConfigError, load_config
+from lcmd.core.paths import PathError, get_knowledge_dirs, validate_knowledge_root
+from lcmd.output.renderer import print_error
 
 app = typer.Typer(
     name="lcmd",
@@ -23,7 +26,15 @@ def main(
         is_eager=True,
     ),
 ) -> None:
-    """LCMD 命令行入口。"""
+    """LCMD 命令行入口."""
     if version:
         typer.echo(f"LCMD {__version__}")
         raise typer.Exit()
+
+    try:
+        config = load_config()
+        knowledge_dirs = get_knowledge_dirs(config)
+        validate_knowledge_root(knowledge_dirs.root)
+    except (ConfigError, PathError) as exc:
+        print_error(str(exc))
+        raise typer.Exit(code=1) from exc
