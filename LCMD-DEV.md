@@ -346,19 +346,24 @@ lcmd/
 │       ├── cli/
 │       │   ├── __init__.py
 │       │   └── app.py
+│       ├── core/
+│       │   ├── __init__.py
+│       │   └── config.py
 │       └── output/
 │           ├── __init__.py
 │           └── renderer.py
 └── tests/
-    └── test_cli.py
+    ├── test_cli.py
+    └── test_config.py
 ```
 
 | 模块 | 职责 |
 |---|---|
 | main.py、__main__.py | 程序入口及 python -m lcmd 启动 |
 | cli/app.py | Typer 应用创建和 CLI 命令注册 |
+| core/config.py | 用户配置读取、校验和保存 |
 | output/renderer.py | Rich 终端输出统一处理 |
-| tests/ | P1 模块自动化测试 |
+| tests/test_cli.py、test_config.py | CLI 与配置模块自动化测试 |
 
 ### P1 验收要求
 
@@ -424,7 +429,8 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - [x] 决定清除原始演示工程，以最终产品架构为基础重新建立项目。
 - [x] 决定保留 GitHub 仓库和本总控文档，但重新初始化 Git 提交历史。
 - [x] 确认 P1 技术方案：Python 最低支持 3.11，当前使用 3.14.10；Typer、Rich、platformdirs；标准库 tomllib；setuptools；pytest、Ruff。
-- [x] 确认 P1 最小项目结构和 P1.1—P1.4 子阶段。\n- [x] 明确 P1.2 配置系统设计：使用 platformdirs 定位配置文件；TOML 保存 platform、language；首次运行创建默认配置；非法配置明确报错；保存采用同目录临时文件和原子替换。
+- [x] 确认 P1 最小项目结构和 P1.1—P1.4 子阶段。
+- [x] 明确 P1.2 配置系统设计：使用 platformdirs 定位配置文件；TOML 保存 platform、language；首次运行创建默认配置；非法配置明确报错；保存采用同目录临时文件和原子替换。
 
 ### 原始仓库基线（2026-10-31，重置前）
 
@@ -433,8 +439,9 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 ### 正式项目重置结果（历史记录）
 
 - 项目曾以仅包含 `LCMD-DEV.md` 的根提交 `538a922` 重新初始化，作为正式开发起点。
-- 随后 P1.1 项目骨架提交 `a62d1ca` 已推送到 GitHub `main`。
-- 当前 GitHub `main` 已包含 P1.1 代码；本地最后一次核验显示 `main` 与 `origin/main` 指向 `a62d1ca`，工作区干净。
+- P1.1 项目骨架提交 `a62d1ca` 已推送到 GitHub `main`。
+- P1.2 配置系统提交 `4d046aa` 已推送到 GitHub `main`。
+- 当前 GitHub `main` 已包含 P1.1、P1.2 代码；2026-10-31 本地核验显示 `main` 与 `origin/main` 均指向 `4d046aa`，工作区干净。
 - GitHub 仓库本身保留，未删除或重建；知识库仓库 `WenZoo1982/lcmd-kb` 仍未创建。
 
 ### 当前执行状态
@@ -453,8 +460,12 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 - [x] P1.1：创建正式项目骨架、项目元数据、README、CLI 入口、Rich 输出模块及基础测试。
 - [x] 创建项目虚拟环境 `.venv`，使用 Python 3.14.10；安装运行和开发依赖。
 - [x] 验证 editable 安装成功，CLI `--help`、`--version`、`-v` 和 `python -m lcmd --version` 可用。
-- [x] pytest：`3 passed`；Ruff lint：`All checks passed!`；Ruff format：`10 files already formatted`。
-- [x] `git diff --cached --check` 通过；P1.1 代码提交 `a62d1ca`（`feat: add LCMD project skeleton and CLI foundation`）已推送。\n- [x] P1.2 配置模块实现并提交：`4d046aa`（`feat: add user configuration management`），已推送至 GitHub `main`。\n- [x] P1.2 最终验收：pytest `22 passed`；Ruff lint 全部通过；Ruff format 检查 13 个文件全部通过；Git 差异检查通过。
+- [x] P1.1 pytest：`3 passed`；Ruff lint：`All checks passed!`；Ruff format：`10 files already formatted`。
+- [x] P1.1 代码提交 `a62d1ca`（`feat: add LCMD project skeleton and CLI foundation`）已推送。
+- [x] P1.2：新增 `src/lcmd/core/config.py` 和 `src/lcmd/core/__init__.py`，实现配置路径定位、平台默认值、TOML 读取、字段校验、首次创建和原子保存。
+- [x] 新增 `tests/test_config.py`，覆盖配置路径、Windows/Linux/macOS 默认平台、首次创建、读取、保存、损坏 TOML、缺失字段、错误类型和非法值，以及非法保存保护已有文件。
+- [x] P1.2 完整测试：`22 passed`；Ruff lint 全部通过；Ruff format 检查 13 个文件全部通过；`git diff --check` 通过。
+- [x] P1.2 代码提交 `4d046aa`（`feat: add user configuration management`）已推送；本地 `main` 与 `origin/main` 同步，工作区干净。
 
 ### 下一步
 
