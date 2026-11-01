@@ -5,7 +5,7 @@
 
 - 主程序仓库：WenZoo1982/lcmd
 - 知识库仓库：WenZoo1982/lcmd-kb（已创建；知识库清单和正式内容尚未落地）
-- 当前阶段：P2 知识库解析与管理（P1.1—P1.4、P2.1—P2.4 已完成并推送；P2.5 CLI/Loader 集成已通过本地验收，代码待提交推送）
+- 当前阶段：P2 知识库解析与管理已完成并推送（P1.1—P1.4、P2.1—P2.5 均已完成）；下一阶段为 P3 命令查询，尚未开始
 
 ---
 
@@ -464,7 +464,7 @@ lcmd/
 
 **P1 — 主程序基础框架：已完成。** P1.1—P1.4 均已完成并推送至 GitHub。P1.4 完成 CLI 初始化接入、错误处理和自动化测试。
 
-**P2 — 知识库解析与管理：进行中。** P2.1 Schema 设计、P2.2 Front Matter Parser、P2.3 Schema Validator、P2.4 Knowledge Loader 均已完成并推送。P2.5 CLI/Loader 集成已完成本地实现和验收，完整测试 `101 passed`，Ruff 检查及格式检查通过；代码尚待提交和推送。
+**P2 — 知识库解析与管理：已完成并推送。** P2.1 Schema 设计、P2.2 Front Matter Parser、P2.3 Schema Validator、P2.4 Knowledge Loader、P2.5 CLI/Loader 集成均已完成。Parser、Validator、Loader 已接入 CLI；有效文档可加载，单篇无效文档隔离并显示警告，知识库级错误明确终止；帮助、版本和无参数帮助不触发知识库初始化。P2.5 完整验收 pytest `101 passed`，Ruff lint、format 和 `git diff --check` 通过。代码提交 `730b4fc` 已推送至 GitHub `main`，本地与远程分支同步，工作区干净。
 
 **正式项目重置：已完成。** 本地与 GitHub `main` 已同步到全新根提交 `538a922`（`chore: initialize clean LCMD project`），该提交只包含 `LCMD-DEV.md`。本地工作区干净；旧演示工程、虚拟环境、缓存和旧 Git 历史已从本地及新的 `main` 历史中清除。
 
@@ -581,11 +581,11 @@ P2.4 开始前已核对本地 Parser、Validator、路径管理、配置和主�
 - 测试先行：调整 `tests/test_cli.py`，覆盖 Loader 调用、结果写入 Typer Context、文档诊断警告、知识库整体加载异常，以及配置异常和帮助/版本行为。
 - 首轮测试按预期出现 3 项失败、4 项通过；接入实现后 CLI 专项测试 `7 passed`。
 - 完整验收：pytest `101 passed`；Ruff lint `All checks passed!`；Ruff format `22 files already formatted`；`git diff --check` 无空白错误（仅有 Windows Git LF/CRLF 行尾转换提醒）。
-- 本地待提交变更仅涉及 `src/lcmd/cli/app.py`、`src/lcmd/output/renderer.py`、`tests/test_cli.py` 三个文件；本次验收时 Git 状态确认只有这三项修改，尚未提交或推送。
+- P2.5 实际代码提交：`730b4fc`（`feat: integrate knowledge loader with CLI`），修改 `src/lcmd/cli/app.py`、`src/lcmd/output/renderer.py`、`tests/test_cli.py` 三个文件，已推送至 GitHub `main`。推送后本地 `main` 与 `origin/main` 均指向 `730b4fc`，`git status -sb` 输出 `## main...origin/main`，工作区干净。
 
 ### 下一步
 
-完成 P2.5 三个文件的代码提交并推送至 GitHub `main`，随后复核 P2 整体完成条件并更新阶段状态。P3 命令查询暂不开始；继续遵循测试先行，不提前扩展搜索、任务引用解析或更新功能。
+P2 整体验收结论：P2.1—P2.5 的设计、解析、校验、加载和 CLI 集成任务均已完成；有效文档加载、单文档错误隔离、知识库级错误处理及 CLI 初始化行为均有自动化测试覆盖。P2 阶段完成并已推送。下一步进入 P3 命令查询规划与测试设计；在用户明确开始前不修改 P3 代码。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
