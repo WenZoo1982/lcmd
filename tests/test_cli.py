@@ -173,3 +173,102 @@ def test_config_error_exits(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert errors == ["配置文件损坏"]
+
+
+def test_cli_displays_matching_command(monkeypatch):
+    """输入命令名称时应显示对应的中文速查资料."""
+    command = SimpleNamespace(
+        name="ls",
+        metadata={"summary": "查看目录中的文件和文件夹。"},
+        body="## 常用示例\n\n```bash\nls -lah\n```",
+    )
+    knowledge = SimpleNamespace(
+        commands=[command],
+        tasks=[],
+        diagnostics=[],
+    )
+    markdown_outputs = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: object())
+    monkeypatch.setattr(
+        cli_app,
+        "load_knowledge",
+        lambda config: knowledge,
+    )
+    monkeypatch.setattr(
+        cli_app,
+        "print_markdown",
+        markdown_outputs.append,
+        raising=False,
+    )
+
+    result = runner.invoke(cli_app.app, ["ls"])
+
+    assert result.exit_code == 0
+    assert len(markdown_outputs) == 1
+    assert "# ls" in markdown_outputs[0]
+    assert "查看目录中的文件和文件夹。" in markdown_outputs[0]
+    assert "常用示例" in markdown_outputs[0]
+
+
+def test_cli_command_lookup_is_case_insensitive(monkeypatch):
+    """CLI 命令查询应忽略大小写."""
+    command = SimpleNamespace(
+        name="ls",
+        metadata={"summary": "查看目录内容。"},
+        body="命令正文。",
+    )
+    knowledge = SimpleNamespace(
+        commands=[command],
+        tasks=[],
+        diagnostics=[],
+    )
+    markdown_outputs = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: object())
+    monkeypatch.setattr(
+        cli_app,
+        "load_knowledge",
+        lambda config: knowledge,
+    )
+    monkeypatch.setattr(
+        cli_app,
+        "print_markdown",
+        markdown_outputs.append,
+        raising=False,
+    )
+
+    result = runner.invoke(cli_app.app, ["LS"])
+
+    assert result.exit_code == 0
+    assert len(markdown_outputs) == 1
+    assert "# ls" in markdown_outputs[0]
+
+
+def test_cli_warns_when_command_is_not_in_knowledge(monkeypatch):
+    """知识库没有对应命令时应明确提示."""
+    knowledge = SimpleNamespace(
+        commands=[],
+        tasks=[],
+        diagnostics=[],
+    )
+    warnings = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: object())
+    monkeypatch.setattr(
+        cli_app,
+        "load_knowledge",
+        lambda config: knowledge,
+    )
+    monkeypatch.setattr(
+        cli_app,
+        "print_warning",
+        warnings.append,
+    )
+
+    result = runner.invoke(cli_app.app, ["unknown-command"])
+
+    assert result.exit_code == 0
+    assert len(warnings) == 1
+    assert "知识库尚未收录该命令" in warnings[0]
+    assert "unknown-command" in warnings[0]

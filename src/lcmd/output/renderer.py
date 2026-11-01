@@ -1,6 +1,7 @@
 """LCMD 统一终端输出."""
 
 from rich.console import Console
+from rich.markdown import Markdown
 
 console = Console()
 
@@ -18,3 +19,8 @@ def print_warning(message: str) -> None:
 def print_info(message: str) -> None:
     """显示普通提示信息."""
     console.print(message)
+
+
+def print_markdown(content: str) -> None:
+    """将 Markdown 内容渲染到终端."""
+    console.print(Markdown(content))
