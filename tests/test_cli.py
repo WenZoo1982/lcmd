@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 import lcmd.cli.app as cli_app
 from lcmd import __version__
 from lcmd.core.config import ConfigError
-from lcmd.core.paths import PathError
+from lcmd.knowledge.loader import KnowledgeLoadError
 
 runner = CliRunner()
 
@@ -24,14 +24,15 @@ def create_test_app() -> typer.Typer:
     test_app.callback()(cli_app.main)
 
     @test_app.command()
-    def probe() -> None:
+    def probe(ctx: typer.Context) -> None:
         """用于触发 CLI 初始化的测试命令."""
+        ctx.ensure_object(dict)
 
     return test_app
 
 
 def test_help() -> None:
-    """帮助参数应正常显示."""
+    """帮助参数应正常显示，且不初始化知识库."""
     result = runner.invoke(cli_app.app, ["--help"])
 
     assert result.exit_code == 0
@@ -55,11 +56,16 @@ def test_short_version() -> None:
     assert f"LCMD {__version__}" in result.stdout
 
 
-def test_initialization_success(monkeypatch, tmp_path) -> None:
-    """配置读取和知识库路径验证成功时应正常执行命令."""
+def test_initialization_loads_knowledge_into_context(monkeypatch) -> None:
+    """CLI 应加载知识库并将结果保存到 Typer Context."""
     config = object()
-    knowledge_dirs = SimpleNamespace(root=tmp_path)
+    knowledge = SimpleNamespace(
+        commands=[],
+        tasks=[],
+        diagnostics=[],
+    )
     calls = []
+    context_objects = []
 
     monkeypatch.setattr(
         cli_app,
@@ -68,23 +74,89 @@ def test_initialization_success(monkeypatch, tmp_path) -> None:
     )
     monkeypatch.setattr(
         cli_app,
-        "get_knowledge_dirs",
-        lambda value: calls.append(("get_knowledge_dirs", value)) or knowledge_dirs,
+        "load_knowledge",
+        lambda value: calls.append(("load_knowledge", value)) or knowledge,
+        raising=False,
+    )
+
+    test_app = typer.Typer(
+        add_completion=False,
+        no_args_is_help=True,
+        invoke_without_command=True,
+    )
+    test_app.callback()(cli_app.main)
+
+    @test_app.command()
+    def probe(ctx: typer.Context) -> None:
+        context_objects.append(ctx.obj)
+
+    result = runner.invoke(test_app, ["probe"])
+
+    assert result.exit_code == 0
+    assert calls == [
+        "load_config",
+        ("load_knowledge", config),
+    ]
+    assert context_objects == [knowledge]
+
+
+def test_initialization_displays_document_diagnostics(monkeypatch) -> None:
+    """单篇文档加载诊断应显示警告，但不终止 CLI."""
+    config = object()
+    diagnostic = SimpleNamespace(
+        path="commands/linux/zh-CN/ls.md",
+        message="文档内容无效",
+    )
+    knowledge = SimpleNamespace(
+        commands=[],
+        tasks=[],
+        diagnostics=[diagnostic],
+    )
+    warnings = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: config)
+    monkeypatch.setattr(
+        cli_app,
+        "load_knowledge",
+        lambda value: knowledge,
+        raising=False,
     )
     monkeypatch.setattr(
         cli_app,
-        "validate_knowledge_root",
-        lambda path: calls.append(("validate_knowledge_root", path)) or path,
+        "print_warning",
+        warnings.append,
+        raising=False,
     )
 
     result = runner.invoke(create_test_app(), ["probe"])
 
     assert result.exit_code == 0
-    assert calls == [
-        "load_config",
-        ("get_knowledge_dirs", config),
-        ("validate_knowledge_root", tmp_path),
-    ]
+    assert len(warnings) == 1
+    assert "commands/linux/zh-CN/ls.md" in warnings[0]
+    assert "文档内容无效" in warnings[0]
+
+
+def test_knowledge_load_error_exits(monkeypatch) -> None:
+    """知识库整体加载异常时应显示错误并以退出码 1 退出."""
+    errors = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: object())
+
+    def raise_load_error(config):
+        raise KnowledgeLoadError("知识库版本不兼容")
+
+    monkeypatch.setattr(
+        cli_app,
+        "load_knowledge",
+        raise_load_error,
+        raising=False,
+    )
+    monkeypatch.setattr(cli_app, "print_error", errors.append)
+
+    result = runner.invoke(create_test_app(), ["probe"])
+
+    assert result.exit_code == 1
+    assert errors == ["知识库版本不兼容"]
 
 
 def test_config_error_exits(monkeypatch) -> None:
@@ -101,31 +173,3 @@ def test_config_error_exits(monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert errors == ["配置文件损坏"]
-
-
-def test_path_error_exits(monkeypatch, tmp_path) -> None:
-    """知识库根目录验证失败时应显示错误并以退出码 1 退出."""
-    errors = []
-    knowledge_dirs = SimpleNamespace(root=tmp_path)
-
-    monkeypatch.setattr(cli_app, "load_config", lambda: object())
-    monkeypatch.setattr(
-        cli_app,
-        "get_knowledge_dirs",
-        lambda config: knowledge_dirs,
-    )
-
-    def raise_path_error(path):
-        raise PathError(f"知识库目录不存在：{path}")
-
-    monkeypatch.setattr(
-        cli_app,
-        "validate_knowledge_root",
-        raise_path_error,
-    )
-    monkeypatch.setattr(cli_app, "print_error", errors.append)
-
-    result = runner.invoke(create_test_app(), ["probe"])
-
-    assert result.exit_code == 1
-    assert errors == [f"知识库目录不存在：{tmp_path}"]

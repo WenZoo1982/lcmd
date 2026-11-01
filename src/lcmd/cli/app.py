@@ -4,8 +4,8 @@ import typer
 
 from lcmd import __version__
 from lcmd.core.config import ConfigError, load_config
-from lcmd.core.paths import PathError, get_knowledge_dirs, validate_knowledge_root
-from lcmd.output.renderer import print_error
+from lcmd.knowledge.loader import KnowledgeLoadError, load_knowledge
+from lcmd.output.renderer import print_error, print_warning
 
 app = typer.Typer(
     name="lcmd",
@@ -18,6 +18,7 @@ app = typer.Typer(
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     version: bool = typer.Option(
         False,
         "--version",
@@ -33,8 +34,12 @@ def main(
 
     try:
         config = load_config()
-        knowledge_dirs = get_knowledge_dirs(config)
-        validate_knowledge_root(knowledge_dirs.root)
-    except (ConfigError, PathError) as exc:
+        knowledge = load_knowledge(config)
+    except (ConfigError, KnowledgeLoadError) as exc:
         print_error(str(exc))
         raise typer.Exit(code=1) from exc
+
+    ctx.obj = knowledge
+
+    for diagnostic in knowledge.diagnostics:
+        print_warning(f"{diagnostic.path}：{diagnostic.message}")
