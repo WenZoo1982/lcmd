@@ -5,7 +5,7 @@
 
 - 主程序仓库：WenZoo1982/lcmd
 - 知识库仓库：WenZoo1982/lcmd-kb（已创建；知识库清单和正式内容尚未落地）
-- 当前阶段：P2 知识库解析与管理（P1.1—P1.4、P2.1—P2.3 已完成；下一步实现 P2.4 Knowledge Loader）
+- 当前阶段：P2 知识库解析与管理（P1.1—P1.4、P2.1—P2.4 已在本地完成并通过验收；P2.2—P2.4 代码尚未提交）
 
 ---
 
@@ -467,7 +467,7 @@ lcmd/
 
 **P1 — 主程序基础框架：已完成。** P1.1—P1.4 均已完成并推送至 GitHub。P1.4 完成 CLI 初始化接入、错误处理和自动化测试。
 
-**P2 — 知识库解析与管理：进行中。** P2.1 Schema 设计基线已确认；P2.2 Front Matter Parser、P2.3 Schema Validator 均已在本地完成并通过验收，代码尚未提交。P2.4 Knowledge Loader 尚未开始。
+**P2 — 知识库解析与管理：进行中。** P2.1 Schema 设计基线已确认；P2.2 Front Matter Parser、P2.3 Schema Validator、P2.4 Knowledge Loader 均已在本地完成并通过验收。P2.2—P2.4 代码尚未提交或推送；下一步核对并提交 P2 阶段代码。
 
 **正式项目重置：已完成。** 本地与 GitHub `main` 已同步到全新根提交 `538a922`（`chore: initialize clean LCMD project`），该提交只包含 `LCMD-DEV.md`。本地工作区干净；旧演示工程、虚拟环境、缓存和旧 Git 历史已从本地及新的 `main` 历史中清除。
 
@@ -561,9 +561,22 @@ P2.4 开始前已核对本地 Parser、Validator、路径管理、配置和主�
 - Loader 返回已加载的命令文档、任务文档和诊断信息。具体数据结构及函数签名以测试先行的实现为准。
 - P2.4 只实现清单检查、版本兼容检查、文档发现/加载和诊断汇总；不实现命令查询、搜索、任务引用解析或 CLI 接入。
 
+### P2.4 实际实现与验收结果
+
+- 新增 `src/lcmd/knowledge/loader.py`，实现 `KnowledgeLoadError`、`LoadedDocument`、`LoadDiagnostic`、`KnowledgeLoadResult` 和 `load_knowledge(config)`。
+- Loader 复用 `get_knowledge_dirs()`、`validate_knowledge_root()`、Parser 和 Validator；从 `lcmd.__version__` 读取主程序版本。
+- 实现 `manifest.json` 读取及严格校验：只允许 `version` 字段，要求有效 SemVer 2.0.0 字符串；清单缺失、读取失败、JSON 格式错误、字段错误和版本格式错误均作为知识库级错误终止加载。
+- 实现只比较 Major 的版本兼容检查：知识库 Major 较低时要求更新知识库，较高时要求升级主程序；相同 Major 下 Minor、Patch、预发布和构建元数据不影响兼容判断。
+- 只扫描当前配置指定平台和语言目录下的直接子级 `*.md` 文件；命令、任务目录缺失或为空均允许加载，不扫描其他平台或语言。
+- 单篇文档读取、UTF-8 解码、Parser 或 Validator 失败时跳过该文档，并记录路径和原因；继续加载其他有效文档。加载结果按文件名稳定排序，分别返回命令、任务和诊断列表。
+- P2.4 不包含命令查询、搜索、任务引用解析或 CLI 接入。
+- 测试先行：新增 `tests/test_loader.py`，覆盖有效命令/任务文档、多个文档排序、平台和语言隔离、目录缺失/为空、单文档错误隔离、manifest 错误及 Major 版本兼容性，共 31 项测试。
+- P2.4 定向测试：`31 passed`。全量 pytest：`100 passed`。Ruff lint：`All checks passed!`。Ruff format：`22 files already formatted`。`git diff --check` 无错误。
+- 当前 P2.2—P2.4 文件仍在本地未跟踪状态：`src/lcmd/knowledge/`、`tests/test_parser.py`、`tests/test_validator.py`、`tests/test_loader.py`。`git diff` 不显示未跟踪文件内容属于 Git 正常行为；尚未提交或推送。
+
 ### 下一步
 
-按上述基线创建 `tests/test_loader.py`，先编写清单、版本、目录缺失/为空、有效文档加载和单文档错误隔离测试，运行确认预期失败后再实现 Loader。开发前后保留并核对 P2.2/P2.3 未提交文件；通过完整 pytest、Ruff lint/format 和 `git diff --check` 验收后，再提交代码并更新本总控文档。
+核对 P2.2—P2.4 的实际文件内容和 Git 状态，确认没有遗漏或超出范围的文件；然后将 Parser、Validator、Loader 及其测试作为 P2 阶段代码提交并推送。提交前保留所有现有未提交文件，不执行 `git clean` 或重置操作。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
