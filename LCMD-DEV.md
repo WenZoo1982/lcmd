@@ -5,7 +5,7 @@
 
 - 主程序仓库：WenZoo1982/lcmd
 - 知识库仓库：WenZoo1982/lcmd-kb（已创建；知识库清单和正式内容尚未落地）
-- 当前阶段：P2 知识库解析与管理（P1.1—P1.4、P2.1—P2.4 已在本地完成并通过验收；P2.2—P2.4 代码尚未提交）
+- 当前阶段：P2 知识库解析与管理（P1.1—P1.4、P2.1—P2.4 已完成并通过验收；P2.2—P2.4 代码已提交并推送至 GitHub）
 
 ---
 
@@ -467,7 +467,7 @@ lcmd/
 
 **P1 — 主程序基础框架：已完成。** P1.1—P1.4 均已完成并推送至 GitHub。P1.4 完成 CLI 初始化接入、错误处理和自动化测试。
 
-**P2 — 知识库解析与管理：进行中。** P2.1 Schema 设计基线已确认；P2.2 Front Matter Parser、P2.3 Schema Validator、P2.4 Knowledge Loader 均已在本地完成并通过验收。P2.2—P2.4 代码尚未提交或推送；下一步核对并提交 P2 阶段代码。
+**P2 — 知识库解析与管理：进行中。** P2.1 Schema 设计基线已确认；P2.2 Front Matter Parser、P2.3 Schema Validator、P2.4 Knowledge Loader 均已完成并通过验收，代码已提交并推送至 GitHub `main`。下一步进入 P2 后续集成任务，开始前先核对实际代码与测试。
 
 **正式项目重置：已完成。** 本地与 GitHub `main` 已同步到全新根提交 `538a922`（`chore: initialize clean LCMD project`），该提交只包含 `LCMD-DEV.md`。本地工作区干净；旧演示工程、虚拟环境、缓存和旧 Git 历史已从本地及新的 `main` 历史中清除。
 
@@ -541,10 +541,10 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 ### P2.2—P2.3 本地实现与验收记录
 
 - P2.2 Parser：新增 `src/lcmd/knowledge/__init__.py`、`src/lcmd/knowledge/parser.py` 和 `tests/test_parser.py`。实现 `ParsedDocument`、`DocumentParseError`、`parse_document()`；支持 LF/CRLF，解析 TOML Front Matter 并原样保留正文；缺失标记或 TOML 语法错误时报错。Parser 不执行 Schema 校验。
-- P2.2 验收：Parser 专项测试 12 项通过；当时全量 pytest `49 passed`；Ruff lint、format 和 `git diff --check` 均通过。代码尚未提交。
+- P2.2 验收：Parser 专项测试 12 项通过；当时全量 pytest `49 passed`；Ruff lint、format 和 `git diff --check` 均通过。代码已随 P2 阶段统一提交并推送。
 - P2.3 Validator：新增 `src/lcmd/knowledge/validator.py` 和 `tests/test_validator.py`。实现 `DocumentValidationError`、`validate_document()`；分别校验 command/task 文档的允许字段、必填非空字符串 `summary`、非空正文；任务文档 `commands` 可选，缺省返回空数组，存在时要求为字符串数组；拒绝未定义字段。Validator 不扫描目录或解析命令引用。
 - P2.3 验收：Validator 专项测试 `20 passed`；全量 pytest `69 passed`；Ruff lint 通过；Ruff format 检查 `20 files already formatted`；`git diff --check` 通过。Validator 文件曾因 BOM/换行组合触发 Ruff 0.17.3 崩溃，统一为 UTF-8 无 BOM、LF 并格式化后已通过全项目检查。
-- P2.2/P2.3 代码当前仅在本地，尚未提交或推送；最后一次本地 `git status --short` 显示 `?? src/lcmd/knowledge/`、`?? tests/test_parser.py`、`?? tests/test_validator.py`。
+- P2.2—P2.4 代码已在后续统一提交中纳入 Git，详见下方提交记录。
 
 ### P2.4 Knowledge Loader 开发基线
 
@@ -572,11 +572,12 @@ P2.4 开始前已核对本地 Parser、Validator、路径管理、配置和主�
 - P2.4 不包含命令查询、搜索、任务引用解析或 CLI 接入。
 - 测试先行：新增 `tests/test_loader.py`，覆盖有效命令/任务文档、多个文档排序、平台和语言隔离、目录缺失/为空、单文档错误隔离、manifest 错误及 Major 版本兼容性，共 31 项测试。
 - P2.4 定向测试：`31 passed`。全量 pytest：`100 passed`。Ruff lint：`All checks passed!`。Ruff format：`22 files already formatted`。`git diff --check` 无错误。
-- 当前 P2.2—P2.4 文件仍在本地未跟踪状态：`src/lcmd/knowledge/`、`tests/test_parser.py`、`tests/test_validator.py`、`tests/test_loader.py`。`git diff` 不显示未跟踪文件内容属于 Git 正常行为；尚未提交或推送。
+- P2.2—P2.4 代码已提交并推送至 GitHub `main`：`5fa687b`（`feat: add knowledge document loading`）。该提交包含 7 个文件、1005 行新增内容：`src/lcmd/knowledge/__init__.py`、`loader.py`、`parser.py`、`validator.py`，以及 `tests/test_loader.py`、`test_parser.py`、`test_validator.py`。
+- 推送前本地与远程曾因远程总控文档提交 `63f13ad` 形成分叉；通过 `git pull --rebase origin main` 安全重放本地代码提交后推送成功。最终验证 `main` 与 `origin/main` 均指向 `5fa687b`，`git status -sb` 显示 `## main...origin/main`，工作区干净。
 
 ### 下一步
 
-核对 P2.2—P2.4 的实际文件内容和 Git 状态，确认没有遗漏或超出范围的文件；然后将 Parser、Validator、Loader 及其测试作为 P2 阶段代码提交并推送。提交前保留所有现有未提交文件，不执行 `git clean` 或重置操作。
+P2.2—P2.4 已统一提交并推送。下一步开始 P2 后续集成前，先检查 CLI 当前实现和 Loader 接口，明确最小集成范围及测试方案；继续采用测试先行，不提前扩展搜索、任务引用解析或更新功能。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
