@@ -5,7 +5,7 @@
 
 - 主程序仓库：WenZoo1982/lcmd
 - 知识库仓库：WenZoo1982/lcmd-kb（已创建；知识库清单和正式内容尚未落地）
-- 当前阶段：P2 知识库解析与管理已完成并推送（P1.1—P1.4、P2.1—P2.5 均已完成）；下一阶段为 P3 命令查询，尚未开始
+- 当前阶段：P3.1 命令精确查询与 Markdown 输出已完成并推送（P0、P1.1—P1.4、P2.1—P2.5 均已完成）；下一步为 P3.2 系统命令发现，尚未开始
 
 ---
 
@@ -466,6 +466,8 @@ lcmd/
 
 **P2 — 知识库解析与管理：已完成并推送。** P2.1 Schema 设计、P2.2 Front Matter Parser、P2.3 Schema Validator、P2.4 Knowledge Loader、P2.5 CLI/Loader 集成均已完成。Parser、Validator、Loader 已接入 CLI；有效文档可加载，单篇无效文档隔离并显示警告，知识库级错误明确终止；帮助、版本和无参数帮助不触发知识库初始化。P2.5 完整验收 pytest `101 passed`，Ruff lint、format 和 `git diff --check` 通过。代码提交 `730b4fc` 已推送至 GitHub `main`，本地与远程分支同步，工作区干净。
 
+**P3.1 — 命令精确查询与 Markdown 输出：已完成并推送。** 新增 `knowledge/lookup.py`，按命令名称精确匹配且不区分大小写；重复名称明确报错。Typer 命令组优先分派已注册子命令，未注册名称进入隐藏的内部查询入口；查询命中后通过 Rich Markdown 展示命令名称、用途摘要和正文，未命中时提示知识库尚未收录。新增 `print_markdown()` 和查询、渲染、CLI 自动化测试。P3.1 不包含系统命令发现、搜索、任务指南或 `--full`。验收结果：全量 pytest `115 passed`；CLI 专项 `10 passed`；查询/渲染/CLI 联合测试 `21 passed`；Ruff lint 通过，format 检查 `25 files already formatted`，`git diff --check` 通过。实际 CLI `--help`、`--version`、无参数帮助通过；使用临时知识库验证真实 `lcmd ls` 中文 Markdown 输出及未收录提示均成功。当前默认知识库目录尚未安装，因此真实查询验收使用临时知识库和 `LCMD_KNOWLEDGE_DIR`，未创建正式知识库内容。代码提交 `4370b88`（`feat: add command lookup and markdown rendering`）已推送至 GitHub `main`。
+
 **正式项目重置：已完成。** 本地与 GitHub `main` 已同步到全新根提交 `538a922`（`chore: initialize clean LCMD project`），该提交只包含 `LCMD-DEV.md`。本地工作区干净；旧演示工程、虚拟环境、缓存和旧 Git 历史已从本地及新的 `main` 历史中清除。
 
 P0 已完成产品定位、架构与模块职责规划、开发阶段划分、总控文档建立，以及原始仓库基线核对。原始演示代码和测试仅用于验证开发环境，不属于正式产品实现。
@@ -585,7 +587,7 @@ P2.4 开始前已核对本地 Parser、Validator、路径管理、配置和主�
 
 ### 下一步
 
-P2 整体验收结论：P2.1—P2.5 的设计、解析、校验、加载和 CLI 集成任务均已完成；有效文档加载、单文档错误隔离、知识库级错误处理及 CLI 初始化行为均有自动化测试覆盖。P2 阶段完成并已推送。下一步进入 P3 命令查询规划与测试设计；在用户明确开始前不修改 P3 代码。
+P2 整体验收结论：P2.1—P2.5 的设计、解析、校验、加载和 CLI 集成任务均已完成并推送。P3.1 已完成命令名称精确查询、大小写不敏感匹配、重复名称检测、Typer 默认查询分派及 Rich Markdown 输出，并通过自动化测试和临时知识库真实 CLI 验收。下一步进入 P3.2 系统命令发现机制的规划与测试设计；当前尚未实现系统命令发现、搜索、任务指南或 `--full`。开始 P3.2 前先核对当前代码和测试状态。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
