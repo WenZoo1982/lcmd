@@ -5,7 +5,7 @@
 
 - 主程序仓库：WenZoo1982/lcmd
 - 知识库仓库：WenZoo1982/lcmd-kb（已创建；知识库清单和正式内容尚未落地）
-- 当前阶段：P2 知识库解析与管理（P1.1—P1.4、P2.1—P2.4 已完成并通过验收；P2.2—P2.4 代码已提交并推送至 GitHub）
+- 当前阶段：P2 知识库解析与管理（P1.1—P1.4、P2.1—P2.4 已完成并推送；P2.5 CLI/Loader 集成已通过本地验收，代码待提交推送）
 
 ---
 
@@ -117,8 +117,7 @@ knowledge/
 - 知识库 Major 高于主程序 Major：提示必须升级主程序，不能让较旧主程序加载面向更新兼容基线的知识库。
 - 主程序发布新的 Major 时，必须同步创建并发布相同 Major 的知识库 Release。知识库应建立新主程序支持的平台目录，即使新平台目录暂时为空或只包含部分命令，也可以正常发布。
 - 平台能力由主程序自身决定；知识库通过 `commands/<platform>/<language>/` 和 `tasks/<platform>/<language>/` 实际目录组织资料。清单不维护平台列表，也不进行平台集合兼容判断。
-- 某个平台目录为空、某条命令尚未收录或某个平台资料尚不完整，都不属于版本兼容错误。知识库版本 Major 匹配时允许正常加载；查询没有对应资料时，明确提示 LCMD 知识库尚未收录，不影响其他查询。
-- 不设置 `platforms`、`manifest_version`、`schema_version` 或 `min_lcmd_version` 字段。当前没有实际需求支持这些额外字段。
+- 某个平台目录为空、某条命令尚未收录或某个平台资料尚不完整，都不属于版本兼容错误。知识库版本 Major 匹配时允许正常加载；查询没有对应资料时，明确提示 LCMD 知识库尚未收录，不影响其他查询。- 不设置 `platforms`、`manifest_version`、`schema_version` 或 `min_lcmd_version` 字段。当前没有实际需求支持这些额外字段。
 
 ### 元数据与 Schema
 
@@ -213,7 +212,7 @@ language = "zh-CN"
 5. 调用相应知识加载、解析和查询模块。
 6. 将结果交给统一输出模块显示。
 
-CLI 每次执行都是独立进程。当前实现仅在实际业务命令触发回调时读取配置、解析知识库根目录并验证根目录；`--help`、`--version` 和无参数帮助不执行该初始化。当前不启动后台服务，不扫描或解析 Markdown。索引是否持久化由实际规模和性能测试决定。
+CLI 每次执行都是独立进程。当前实现仅在实际业务命令触发回调时读取配置并调用知识库加载器；加载器验证根目录、读取并校验 manifest、检查 Major 版本兼容性，再加载当前平台和语言的命令及任务 Markdown 文档。`--help`、`--version` 和无参数帮助不执行该初始化。加载结果保存在 Typer Context 的 `ctx.obj` 中，供后续命令读取；单篇文档加载失败通过警告展示，不阻止其他有效文档使用；知识库级错误通过统一错误输出并以退出码 1 结束。当前不启动后台服务。索引是否持久化由实际规模和性能测试决定。
 
 ### 命令查询与系统命令发现
 
@@ -238,7 +237,6 @@ LCMD 始终只提供知识查询，不执行用户输入的系统命令。
 1. 命令名称完全匹配。
 2. 用途说明匹配。
 3. 正文匹配。
-
 同等级按名称稳定排序。结果按命令、任务分组并标注平台。默认最多显示 10 条，支持 --limit；超出提示还有更多结果，不做复杂分页。中文检索实现和索引策略在 P4 通过实际测试确定。
 
 ### 任务指南与命令关联
@@ -357,8 +355,7 @@ CLI 只接收输入、分发业务并展示结果；核心模块负责业务逻�
 ### 开发环境基线
 
 - 开发系统：Windows 11，PowerShell 5.1。
-- 当前开发 Python：3.14.10。
-- 本机另有 Python 3.10，但不作为新项目基准。
+- 当前开发 Python：3.14.10。- 本机另有 Python 3.10，但不作为新项目基准。
 - 项目最低支持 Python：3.11。
 - pip：26.2.2。
 - Git：2.56.0.windows.2。
@@ -467,7 +464,7 @@ lcmd/
 
 **P1 — 主程序基础框架：已完成。** P1.1—P1.4 均已完成并推送至 GitHub。P1.4 完成 CLI 初始化接入、错误处理和自动化测试。
 
-**P2 — 知识库解析与管理：进行中。** P2.1 Schema 设计基线已确认；P2.2 Front Matter Parser、P2.3 Schema Validator、P2.4 Knowledge Loader 均已完成并通过验收，代码已提交并推送至 GitHub `main`。下一步进入 P2 后续集成任务，开始前先核对实际代码与测试。
+**P2 — 知识库解析与管理：进行中。** P2.1 Schema 设计、P2.2 Front Matter Parser、P2.3 Schema Validator、P2.4 Knowledge Loader 均已完成并推送。P2.5 CLI/Loader 集成已完成本地实现和验收，完整测试 `101 passed`，Ruff 检查及格式检查通过；代码尚待提交和推送。
 
 **正式项目重置：已完成。** 本地与 GitHub `main` 已同步到全新根提交 `538a922`（`chore: initialize clean LCMD project`），该提交只包含 `LCMD-DEV.md`。本地工作区干净；旧演示工程、虚拟环境、缓存和旧 Git 历史已从本地及新的 `main` 历史中清除。
 
@@ -477,8 +474,7 @@ P0 已完成产品定位、架构与模块职责规划、开发阶段划分、�
 
 - [x] 产品定位及简洁、易懂、实用的内容原则。
 - [x] 主程序与知识库独立维护、独立更新。
-- [x] 知识库按平台和语言组织，命令与任务分目录。
-- [x] 配置只保存 platform、language，目录由程序推导。
+- [x] 知识库按平台和语言组织，命令与任务分目录。- [x] 配置只保存 platform、language，目录由程序推导。
 - [x] 不设置 keywords、aliases 元数据字段。
 - [x] 不自动改写命令名称或猜测用户意图；知识库未命中后，通过系统命令发现机制辅助判断，不执行目标命令。
 - [x] 确定命令查询、内容搜索、任务指南、平台语言切换和统一更新入口。
@@ -575,9 +571,21 @@ P2.4 开始前已核对本地 Parser、Validator、路径管理、配置和主�
 - P2.2—P2.4 代码已提交并推送至 GitHub `main`：`5fa687b`（`feat: add knowledge document loading`）。该提交包含 7 个文件、1005 行新增内容：`src/lcmd/knowledge/__init__.py`、`loader.py`、`parser.py`、`validator.py`，以及 `tests/test_loader.py`、`test_parser.py`、`test_validator.py`。
 - 推送前本地与远程曾因远程总控文档提交 `63f13ad` 形成分叉；通过 `git pull --rebase origin main` 安全重放本地代码提交后推送成功。最终验证 `main` 与 `origin/main` 均指向 `5fa687b`，`git status -sb` 显示 `## main...origin/main`，工作区干净。
 
+### P2.5 CLI 与 Knowledge Loader 集成
+
+- CLI 回调在实际业务命令启动时读取配置，并调用 `load_knowledge(config)`；不再由 CLI 单独调用路径推导和根目录验证函数，相关工作统一由 Loader 负责。
+- 使用 Typer `Context` 保存 `KnowledgeLoadResult`：通过 `ctx.obj` 向后续 CLI 命令提供已加载的命令、任务和诊断数据，不引入全局可变状态或额外管理器。
+- CLI 捕获 `ConfigError` 和 `KnowledgeLoadError`，通过统一错误输出显示原因，并以退出码 1 退出。
+- Loader 返回的单篇文档诊断逐条通过新增的 `print_warning()` 展示；文档级错误不终止启动，其他有效文档仍可使用。
+- `--help`、`--version` 和无参数帮助继续不执行知识库初始化。
+- 测试先行：调整 `tests/test_cli.py`，覆盖 Loader 调用、结果写入 Typer Context、文档诊断警告、知识库整体加载异常，以及配置异常和帮助/版本行为。
+- 首轮测试按预期出现 3 项失败、4 项通过；接入实现后 CLI 专项测试 `7 passed`。
+- 完整验收：pytest `101 passed`；Ruff lint `All checks passed!`；Ruff format `22 files already formatted`；`git diff --check` 无空白错误（仅有 Windows Git LF/CRLF 行尾转换提醒）。
+- 本地待提交变更仅涉及 `src/lcmd/cli/app.py`、`src/lcmd/output/renderer.py`、`tests/test_cli.py` 三个文件；本次验收时 Git 状态确认只有这三项修改，尚未提交或推送。
+
 ### 下一步
 
-P2.2—P2.4 已统一提交并推送。下一步开始 P2 后续集成前，先检查 CLI 当前实现和 Loader 接口，明确最小集成范围及测试方案；继续采用测试先行，不提前扩展搜索、任务引用解析或更新功能。
+完成 P2.5 三个文件的代码提交并推送至 GitHub `main`，随后复核 P2 整体完成条件并更新阶段状态。P3 命令查询暂不开始；继续遵循测试先行，不提前扩展搜索、任务引用解析或更新功能。
 
 ### 待确定（在对应阶段解决，不阻塞重置）
 
