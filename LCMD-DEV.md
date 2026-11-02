@@ -5,7 +5,7 @@
 - 主程序仓库：https://github.com/WenZoo1982/lcmd
 - 知识库仓库：https://github.com/WenZoo1982/lcmd-kb
 - 本地项目目录：D:\Project_DEV\lcmd
-- 当前开发阶段：P4 内容搜索；搜索核心与 CLI 接入已完成本地验收，代码尚未提交
+- 当前开发阶段：P4 内容搜索已完成并推送；下一阶段为 P5 平台与语言管理
 - 首发目标：Windows x64、Linux AMD64；macOS 和 ARM64 暂不纳入首发。
 
 ---
@@ -189,7 +189,7 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
 |---|---|---|---|
 | P3.2 收尾 | 将已验收的配置/路径改动安全并入主分支 | 审查 6 个源码/测试文件；确认测试与差异；独立提交并推送代码 | 已完成；代码提交 `22674fe` 已推送至 `main`；文档独立更新 |
 | P3.3 | 补齐现有 CLI 合同 | `--version` 同时显示主程序和本地知识库版本；支持 `en-US` 知识文档；中文帮助提示；验证平台专属优先与 common 回退 | 已完成并推送；129 项测试通过，Ruff 检查/格式通过，真实 CLI 验收通过；代码提交 `7d5ac6239abe0c57ffae65097f0c5306149c172f` |
-| P4 | 内容搜索 | 仅搜索 commands；普通搜索匹配文档名称和 summary；`--full` 额外搜索 Markdown 正文；支持多关键词、相关度排序；离线运行 | 搜索核心与 CLI 接入已完成本地验收；代码待提交推送 |
+| P4 | 内容搜索 | 仅搜索 commands；普通搜索匹配文档名称和 summary；`--full` 额外搜索 Markdown 正文；支持多关键词、相关度排序；离线运行 | 已完成并推送；132 项测试通过，Ruff 检查/格式通过，真实 CLI 验收通过；代码提交 `e397732c5930b8edf1bb0be57266fa67b7faa65c` |
 | P5 | 平台与语言管理 | `platform`、`language` 查看和切换；配置持久化与输入校验 | 切换后查询结果正确；非法值不破坏原配置 |
 | P6 | 知识库仓库与首批内容 | 完成 lcmd-kb 的 manifest/commands 目录结构；依据官方 man 手册整理首批高频命令；建立内容检查流程 | 主程序可加载真实知识库；文档格式、版本和平台目录通过校验 |
 | P7 | 统一更新 | GitHub Releases 版本检查、下载、校验、用户确认、替换、失败恢复 | 主程序/知识库分别更新；兼容性与失败场景有测试；普通查询仍离线 |
@@ -287,7 +287,7 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
 
 P3.3 已完成：代码实现、自动化测试、静态检查、真实 CLI 验收均已通过；代码已推送至 GitHub `main`。主程序与知识库版本显示、英文知识语言支持、平台专属优先/common 回退和帮助提示均已验证。
 
-### P4 当前状态：搜索核心与 CLI 接入已完成本地验收，代码待提交
+### P4 当前状态：搜索核心与 CLI 接入已完成并推送
 
 #### 已完成的产品范围调整
 
@@ -343,17 +343,24 @@ P3.3 已完成：代码实现、自动化测试、静态检查、真实 CLI 验�
 - 真实 CLI 验收：`lcmd --help` 列出 search 且隐藏内部查询命令；`lcmd dir`、`lcmd git` 正常显示完整文档；`lcmd search "dir"`、`lcmd search "git"` 命中并只显示名称和摘要；普通模式搜索 `Get-ChildItem` 未命中，添加 `--full` 后命中 `dir`，输出格式仍只包含名称和摘要。
 - 用户提供的 `git diff --check` 无错误；Git 状态显示 2 个已修改文件和 2 个新增文件。
 - 助手已审查 `src/lcmd/cli/app.py`、`tests/test_cli.py`、`src/lcmd/knowledge/search.py`、`tests/test_search.py` 的内容，未发现偏离已确认设计的问题。
-- **代码尚未提交或推送**。本地待提交文件：`src/lcmd/cli/app.py`、`tests/test_cli.py`、`src/lcmd/knowledge/search.py`、`tests/test_search.py`。
+- 用户已提交并推送 P4.1/P4.2 代码：`e397732c5930b8edf1bb0be57266fa67b7faa65c`，提交信息 `feat: add offline command search`。
+- GitHub 提交记录核验：4 个文件，315 insertions、0 deletions；父提交为总控文档提交 `8fefe992cff6a517972a6aceffee273bfd9d8d87`。
+- 用户本地执行顺序：`git commit` 成功；`git pull --rebase origin main` 成功；`git push origin main` 成功，远程 `main` 从 `8fefe99` 更新至 `e397732`。
 
-#### P4 下一步
+#### P4 完成结论
 
-完成上述四个文件的本地 Git 暂存检查后，提交并推送 P4.1/P4.2 代码；代码提交后再核验远程状态。不得重复运行已经通过的测试，除非后续修改了代码。不得提前扩展到 P5 平台/语言切换或 P7 在线更新。
+P4 已完成：搜索设计、核心实现、CLI 接入、自动化测试、静态检查和真实 CLI 验收均已通过；代码已推送至 GitHub `main`。普通搜索和 `--full` 的实际行为符合已确认设计。P4 不读取系统 man 手册，也不恢复 `tasks/` 或实现 `lcmd task`。
+
+#### 下一阶段：P5 平台与语言管理
+
+按既定路线进入 P5，目标是实现 `lcmd platform`、`lcmd language` 的查看与切换，并验证配置持久化和非法输入处理。开始 P5 前先核对本地 Git 状态及当前配置/CLI 实现；不要重复执行 P4 已通过的测试，除非修改了相关代码。
 
 ### 文档同步状态
 
 - 主程序代码提交 `e27690535a832af024c67430b8f32133f5d01c48` 已推送到远程 `main`。
 - 知识库 `tasks/` 删除提交 `4a41709f9210617ff982e307d2711ba732d2bcd6` 已推送到远程 `main`。
-- 本次总控文档更新与 P4 代码提交保持独立；文档更新成功后，用户需执行 `git pull --ff-only origin main` 同步文档。
+- P4 代码提交 `e397732c5930b8edf1bb0be57266fa67b7faa65c` 已推送到远程 `main`。
+- 本次总控文档更新与 P4 代码提交保持独立；用户需在本地执行 `git pull --ff-only origin main` 同步文档。
 - 文档提交与代码提交保持独立。
 
 
