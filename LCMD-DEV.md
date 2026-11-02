@@ -5,7 +5,7 @@
 - 主程序仓库：https://github.com/WenZoo1982/lcmd
 - 知识库仓库：https://github.com/WenZoo1982/lcmd-kb
 - 本地项目目录：D:\Project_DEV\lcmd
-- 当前开发阶段：P5 平台与语言管理已完成实现、验收并推送至 GitHub；下一阶段为 P6 知识库仓库与首批内容
+- 当前开发阶段：P5 平台与语言管理已完成实现、验收并推送至 GitHub；P6 知识库仓库与首批内容正在进行
 - 首发目标：Windows x64、Linux AMD64；macOS 和 ARM64 暂不纳入首发。
 
 ---
@@ -20,7 +20,7 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
 - 查询是否命中只取决于知识库文档，不取决于目标命令是否安装。
 - 普通查询不联网；只有 lcmd --update 执行联网更新检查。
 - 命令文档重点包括用途、基本语法、常用参数、常用示例及必要注意事项，不复制维护官方完整手册。
-- 首发语言为简体中文；文档应简洁、准确、易懂、可复制，对高风险操作给出必要提醒。
+- 知识库内容建设优先完成 `zh-CN`，并配套 `en-US`；文档应简洁、准确、易懂、可复制，对高风险操作给出必要提醒。
 
 ## 2. 平台与发行范围
 
@@ -188,7 +188,7 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
 | P3.3 | 补齐现有 CLI 合同 | `--version` 同时显示主程序和本地知识库版本；支持 `en-US` 知识文档；中文帮助提示；验证平台专属优先与 common 回退 | 已完成并推送；129 项测试通过，Ruff 检查/格式通过，真实 CLI 验收通过；代码提交 `7d5ac6239abe0c57ffae65097f0c5306149c172f` |
 | P4 | 内容搜索 | 仅搜索 commands；普通搜索匹配文档名称和 summary；`--full` 额外搜索 Markdown 正文；支持多关键词、相关度排序；离线运行 | 已完成并推送；132 项测试通过，Ruff 检查/格式通过，真实 CLI 验收通过；代码提交 `e397732c5930b8edf1bb0be57266fa67b7faa65c` |
 | P5 | 平台与语言管理 | 首发仅支持 Windows、Linux；实现 `platform`、`language` 查看和切换；配置持久化与输入校验；管理命令不依赖知识库成功加载 | 已完成实现、验收并推送；27 项配置测试、29 项 CLI 测试、148 项全量测试通过；Ruff lint/format 通过；真实 CLI 验证平台/语言切换、重复设置、非法值保护及知识库路径失效时管理命令仍可用。代码提交 `5ead529` 已推送至 `main` |
-| P6 | 知识库仓库与首批内容 | 完成 lcmd-kb 的 manifest/commands 目录结构；依据官方 man 手册整理首批高频命令；建立内容检查流程 | 主程序可加载真实知识库；文档格式、版本和平台目录通过校验 |
+| P6 | 知识库仓库与首批内容 | 核对 lcmd-kb 结构与主程序 Loader/Parser/Validator；制定文档规范；按确认顺序建设首批 Windows、Linux、Common 命令的中英文文档；建立内容检查流程 | 主程序可加载真实知识库；文档格式、版本和平台目录通过校验 |
 | P7 | 统一更新 | GitHub Releases 版本检查、下载、校验、用户确认、替换、失败恢复 | 主程序/知识库分别更新；兼容性与失败场景有测试；普通查询仍离线 |
 | P8 | 安装包与跨平台构建 | Windows x64 安装包、Linux AMD64 .deb；安装位置与用户数据分离 | 在目标系统完成干净安装、启动、升级和卸载验证 |
 | P9 | 首发验收 | 整理用户文档、版本说明、Release 资产与发布检查清单 | Windows x64、Linux AMD64 首发范围逐项验收通过 |
@@ -382,6 +382,73 @@ P5 功能、自动化测试、静态检查、真实 CLI 验收及 GitHub 远程�
 - P5 代码提交 `5ead529` 已由用户推送至远程 `main`；推送后本地 `HEAD` 与 `origin/main` 一致，工作区干净（以用户本次终端输出为准）。
 - 文档提交与代码提交保持独立。
 
+
+
+### P6 当前进展：知识库结构、规范与首批内容计划已确认
+
+#### 知识库仓库远程状态（2026-11-02 核验）
+
+- 仓库：`WenZoo1982/lcmd-kb`，默认分支 `main`。
+- 远程最新提交：`6a85ecb`，提交信息 `chore: remove macOS placeholder knowledge directories`。
+- `manifest.json` 当前知识库版本为 `0.1.0`；目前没有 GitHub Release。
+- 根目录包含 `README.md`、`manifest.json` 和 `commands/`。
+- 当前远程目录结构：
+  
+      commands/
+      ├── common/
+      │   ├── zh-CN/
+      │   └── en-US/
+      ├── linux/
+      │   ├── zh-CN/
+      │   └── en-US/
+      └── windows/
+          ├── zh-CN/
+          └── en-US/
+
+- 当前远程只有 3 篇英文示例文档：`windows/en-US/dir.md`、`common/en-US/dir.md`、`common/en-US/git.md`；尚无正式中文命令文档或 Linux 专属命令文档。
+- 用户本地知识库仓库已核验：`HEAD` 与 `origin/main` 均为 `6a85ecb`，无需 pull。工作区有一个未跟踪文件 `commands/windows/zh-CN/lcmd-priority-test.md`，其内容是平台优先级测试标记（`WINDOWS_MARKER`），不是正式命令文档；当前建议保留在本地，不提交到公开知识库。该文件不改变远程状态。
+
+#### 已依据主程序实际代码确认的文档规则
+
+- Loader：只扫描当前平台/语言目录和对应 Common/语言目录的顶层 `*.md`，不递归；按文件名不区分大小写排序。
+- 命令标识取 Markdown 文件名（不含扩展名）；文件名即命令正式名称。
+- Parser：文件必须以独立的 `+++` 行开始 Front Matter，并以另一独立的 `+++` 行结束；Front Matter 使用 TOML；结束标记之后的正文原样保留。
+- Validator：当前只允许一个元数据字段 `summary`；它必须是非空字符串；Markdown 正文必须非空；未知字段会导致该篇文档校验失败。
+- 文档使用 UTF-8 Markdown + TOML Front Matter。当前程序不强制正文标题、章节顺序或示例数量；内容建设将另外遵循统一质量规范。
+- 单篇文档解析/校验失败会被隔离并记录诊断，不阻断其他有效文档。
+- 平台优先级以成功加载的文档名称为准：平台文档成功加载后优先；Common 仅补充平台没有成功加载的同名文档。若平台同名文档存在但解析/校验失败，当前 Loader 仍可能回退加载 Common 同名文档。这是已核对的现有行为，P6 内容建设阶段不擅自修改 Loader。
+
+#### 已确认的文档内容规范
+
+- 中文文档建议章节：用途、基本语法、常用参数、常用示例；按命令实际需要可省略不适用章节。
+- 英文文档使用对应章节：Purpose、Basic syntax、Common options、Common examples。
+- 以高频、实用内容为主，不复制完整官方手册；参数与示例必须准确。
+- 平台行为或语法有差异时分别编写平台专属文档；Common 只收录真正跨平台工具的通用知识。
+- 对有风险的操作提供必要提醒；LCMD 只展示知识，不执行文档中的命令。
+- 当前 Validator 只校验 Front Matter 的 `summary` 和非空正文；上述章节与内容质量要求属于编辑规范，不应误称为程序已强制校验。
+
+#### 首批命令范围与内容建设顺序（用户已确认）
+
+首批暂定 22 个命令文档主题：
+
+| 分类 | 命令 | 用途 |
+|---|---|---|
+| Windows 专属 | `dir`、`cd`、`copy`、`move`、`del`、`mkdir`、`rmdir`、`ipconfig`、`ping`、`tasklist` | 文件/目录操作、网络诊断、进程查看 |
+| Linux 专属 | `ls`、`cd`、`cp`、`mv`、`rm`、`mkdir`、`rmdir`、`pwd`、`ip`、`ping` | 文件/目录操作、网络诊断、路径查看 |
+| Common | `git`、`ssh` | 跨平台版本控制与安全远程连接 |
+
+内容建设顺序已由用户确认：
+
+1. Windows `zh-CN`
+2. Linux `zh-CN`
+3. Windows `en-US`
+4. Linux `en-US`
+5. Common `zh-CN`
+6. Common `en-US`
+
+Common 必须保留两个语言目录：`commands/common/zh-CN/` 与 `commands/common/en-US/`。Loader 按当前语言回退，不允许跨语言回退。例如 Windows + `zh-CN` 只回退到 Common `zh-CN`，Windows + `en-US` 只回退到 Common `en-US`。
+
+以上是首批内容计划，不代表这些文档已经创建或验收。P6 后续先按上述顺序逐组编写、审查和验证，不一次性生成大批未审阅文档；必要的内容校验工具须在核对现有测试与实际 Schema 后再决定是否增加。
 
 ## 13. 协作与状态更新规则
 
