@@ -538,7 +538,7 @@ lcmd-kb/
 - 平台命令：`platforms/<platform>/<language>/<command>.md`。普通系统命令继续一条命令一篇文档。
 - 第三方工具：`tools/<tool>/<language>/`。工具入口文档统一使用当前工具自身名称命名，即 `<tool>.md`，例如 Git 使用 `git.md`、Docker 使用 `docker.md`。复杂工具在入口文档之外组织子命令详细页；简单或参数型工具可以只有这一篇综合速查文档。
 - `<tool>.md` 是由工具目录名确定的通用入口文件约定，不是按具体工具名称编写特例；Loader 根据当前工具目录名定位入口文档。
-- 工具子命令的路径/文件组织必须支持多级路径，例如未来可表达 `lcmd docker compose up`，不能把实现限制为固定两个参数。P6 设计阶段确定安全、可移植且无歧义的路径编码规则。
+- 工具子命令与平台命令采用相同的 CLI 参数解析方式：工具名之后的每个参数就是一个子命令路径段，不另设 Git/Docker 等工具专属语法。路径映射规则为：除最后一个子命令段外，前面的段依次作为目录；最后一个段作为同名 `.md` 文件。例如 `lcmd docker compose` 对应 `tools/docker/<language>/compose.md`，`lcmd docker compose up` 对应 `tools/docker/<language>/compose/up.md`；`lcmd git init` 对应 `tools/git/<language>/init.md`。若查询路径对应一个子命令目录但没有同名 Markdown 文档，则显示该目录下可用的下一级子命令列表。路径编码须安全、可移植且无歧义。
 - 工具目录名、平台目录名和语言目录名采用统一的规范化规则；大小写处理、非法路径字符、路径穿越防护、文件名冲突和完整文档 ID 必须在 P6 设计中明确。
 - 工具知识默认对当前选择的所有平台可见。Common 旧目录不再作为第三种类别；旧 Common 文档迁移到 `tools/`。若未来确实需要平台专属工具说明，必须先设计通用覆盖规则，不能临时为单个工具添加特例。
 
@@ -572,7 +572,9 @@ language = "zh-CN"
   - 不存在 `<tool>.md`，且只有一篇 Markdown 文档：直接显示该唯一文档，作为工具综合速查页。
   - 不存在 `<tool>.md`，且有多篇 Markdown 文档：显示可用文档/子命令列表，不任意挑选其中一篇。
   - 当前语言目录不存在或没有有效文档：明确提示，不静默切换语言，也不回退到其他语言。
-- `lcmd git init`：按工具目录和子命令路径定位 init 详细文档；`lcmd docker`、`lcmd docker run` 等使用完全相同的通用规则。
+- 工具查询沿用与 Git 等命令行工具相同的参数结构：`lcmd <tool> <subcommand...>`；工具名之后的参数按顺序组成子命令路径，不为特定工具设计单独语法。
+- 路径映射：`lcmd git init` 对应 `tools/git/<language>/init.md`；`lcmd docker compose` 对应 `tools/docker/<language>/compose.md`；`lcmd docker compose up` 对应 `tools/docker/<language>/compose/up.md`。即最后一个子命令段映射为同名 Markdown 文件，前面的子命令段映射为目录。
+- 若查询路径对应的子命令目录存在、但没有对应的同名 Markdown 文档，则显示该目录下可用的下一级子命令列表。
 - 工具名称及子命令路径均由知识库目录/文档推导，不能在主程序中维护 Git、Docker 等名称或子命令清单。
 - 查询解析必须支持规范允许的多级子命令路径，并保证与主程序公开选项、`search`、`platform`、`language` 等 CLI 命令不产生不可控冲突。
 - 文档完整标识应包含类别、平台/工具、语言及命令路径，避免不同平台或工具下同名文档冲突。
