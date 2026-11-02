@@ -75,8 +75,8 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
 命令文档使用 UTF-8 Markdown + TOML Front Matter：
 
 - 必填 summary：非空字符串。
-- 所有 Markdown 文档（包括工具 `index.md` 导航页、平台命令文档、工具子命令文档及简单工具综合文档）均必须提供非空 `summary`。不设置 `keywords`、`aliases`；搜索字段由目录/文件路径推导，并从文档提取 summary 和正文内容。
-- 不增加 `type` 等重复描述目录信息的 Front Matter 字段。文档类别及标识由路径推导：`platforms/<platform>/<language>/<command>.md` 表示平台命令；`tools/<tool>/<language>/index.md` 表示工具导航页；工具语言目录下其他 Markdown 文件按相对路径表示工具综合文档或子命令文档，具体查询语义由目录结构确定。
+- 所有 Markdown 文档（包括工具入口文档、平台命令文档、工具子命令文档及简单工具综合文档）均必须提供非空 `summary`。不设置 `keywords`、`aliases`；搜索字段由目录/文件路径推导，并从文档提取 summary 和正文内容。
+- 不增加 `type` 等重复描述目录信息的 Front Matter 字段。文档类别及标识由路径推导：`platforms/<platform>/<language>/<command>.md` 表示平台命令；`tools/<tool>/<language>/<tool>.md` 表示工具入口/总览文档；工具语言目录下其他 Markdown 文件按相对路径表示工具综合文档或子命令文档，具体查询语义由目录结构确定。
 - Front Matter 首版只要求非空字符串 `summary`，不设置 `type`、`keywords` 或 `aliases`。Parser 负责解析 Front Matter；Validator 校验必填元数据及路径/文档结构约束；Loader 负责发现、加载文档并汇总诊断。
 - 单篇文档错误隔离：跳过无效文档并报告路径和原因，其他有效文档继续加载；知识库根目录、manifest 或兼容性错误属于整体错误。
 
@@ -516,7 +516,7 @@ lcmd-kb/
     └── tools/
         ├── git/
         │   ├── zh-CN/
-        │   │   ├── index.md
+        │   │   ├── git.md
         │   │   ├── init.md
         │   │   ├── status.md
         │   │   └── ...
@@ -536,8 +536,8 @@ lcmd-kb/
 目录约定：
 
 - 平台命令：`platforms/<platform>/<language>/<command>.md`。普通系统命令继续一条命令一篇文档。
-- 第三方工具：`tools/<tool>/<language>/`。复杂工具可有 `index.md` 导航页和子命令详细页；简单或参数型工具可以只有一篇综合速查文档，不强制创建导航页。
-- `index.md` 是工具导航页的通用保留文件名，不根据 Git、Docker 等工具名称识别。
+- 第三方工具：`tools/<tool>/<language>/`。工具入口文档统一使用当前工具自身名称命名，即 `<tool>.md`，例如 Git 使用 `git.md`、Docker 使用 `docker.md`。复杂工具在入口文档之外组织子命令详细页；简单或参数型工具可以只有这一篇综合速查文档。
+- `<tool>.md` 是由工具目录名确定的通用入口文件约定，不是按具体工具名称编写特例；Loader 根据当前工具目录名定位入口文档。
 - 工具子命令的路径/文件组织必须支持多级路径，例如未来可表达 `lcmd docker compose up`，不能把实现限制为固定两个参数。P6 设计阶段确定安全、可移植且无歧义的路径编码规则。
 - 工具目录名、平台目录名和语言目录名采用统一的规范化规则；大小写处理、非法路径字符、路径穿越防护、文件名冲突和完整文档 ID 必须在 P6 设计中明确。
 - 工具知识默认对当前选择的所有平台可见。Common 旧目录不再作为第三种类别；旧 Common 文档迁移到 `tools/`。若未来确实需要平台专属工具说明，必须先设计通用覆盖规则，不能临时为单个工具添加特例。
@@ -568,9 +568,9 @@ language = "zh-CN"
 ### 14.4 工具导航、子命令与查询规则
 
 - `lcmd <tool>` 的工具入口按当前工具语言目录中的文档结构统一决定：
-  - 存在 `index.md`：显示该工具导航页；其他文档作为子命令详细页。
-  - 不存在 `index.md`，且只有一篇 Markdown 文档：直接显示该唯一文档，作为工具综合速查页；文件名不要求与工具目录名相同。
-  - 不存在 `index.md`，且有多篇 Markdown 文档：显示可用文档/子命令列表，不任意挑选其中一篇。
+  - 存在 `<tool>.md`：显示该工具入口/总览文档；其他文档作为子命令详细页。
+  - 不存在 `<tool>.md`，且只有一篇 Markdown 文档：直接显示该唯一文档，作为工具综合速查页。
+  - 不存在 `<tool>.md`，且有多篇 Markdown 文档：显示可用文档/子命令列表，不任意挑选其中一篇。
   - 当前语言目录不存在或没有有效文档：明确提示，不静默切换语言，也不回退到其他语言。
 - `lcmd git init`：按工具目录和子命令路径定位 init 详细文档；`lcmd docker`、`lcmd docker run` 等使用完全相同的通用规则。
 - 工具名称及子命令路径均由知识库目录/文档推导，不能在主程序中维护 Git、Docker 等名称或子命令清单。
@@ -599,7 +599,7 @@ language = "zh-CN"
 - 旧结构为 `commands/common/<language>/`、`commands/windows/<language>/`、`commands/linux/<language>/`。
 - P6 采用一次性迁移到新结构，不要求主程序长期兼容旧目录。
 - 旧 Windows/Linux 文档分别迁移到 `commands/platforms/windows/<language>/` 和 `commands/platforms/linux/<language>/`。
-- 旧 Common 第三方工具文档迁移到对应的 `commands/tools/<tool>/<language>/`。例如旧 `common/zh-CN/git.md` 应转换为 Git 工具目录中的综合文档或导航页，具体内容结构按新规范审查，不机械复制成不符合新 Schema 的文件。
+- 旧 Common 第三方工具文档迁移到对应的 `commands/tools/<tool>/<language>/`。例如旧 `common/zh-CN/git.md` 可迁移为 `tools/git/zh-CN/git.md` 工具入口/综合文档，具体内容结构按新规范审查，不机械复制成不符合新 Schema 的文件。
 - 迁移必须保留有效知识内容、语言隔离和必要的差异说明；迁移后检查旧目录无残留、文档无丢失、同名 ID 无冲突。
 - 旧平台优先/Common 回退逻辑由新类别模型取代：平台系统命令只在所选平台目录查询；第三方工具统一在 tools 目录查询，不再把平台命令和第三方工具混为同一命令命名空间。
 - Windows/Linux 既有文档内容、查询、搜索、语言隔离及 CLI 管理行为必须进行回归验收。
