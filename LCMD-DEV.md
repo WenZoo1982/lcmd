@@ -52,9 +52,12 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
     lcmd-kb/
     ├── manifest.json
     └── commands/
-        ├── common/<language>/
-        ├── linux/<language>/
-        └── windows/<language>/
+        ├── platforms/
+        │   ├── <platform>/<language>/
+        │   └── ...
+        └── tools/
+            ├── <tool>/<language>/
+            └── ...
 
 - `commands/` 是唯一知识文档目录。Windows/Linux 系统命令继续采用单命令文档；Common 第三方工具可采用工具导航文档 + 子命令详细文档的层级结构，具体统一格式见第 14 节。
 - 搜索统一检索命令文档的文件名、summary 和正文。用户可以输入命令名称，也可以输入任务描述；通过命令用途、摘要和正文匹配相关命令，不另设 tasks 文档类型。
@@ -87,7 +90,11 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
     # path = "D:/LCMD/knowledge"
 
 - 配置保存 platform、language，以及可选的知识库根目录 path。
-- path 指向知识库根目录，不是 commands/<platform>/<language> 子目录；必须是绝对路径。
+- `path` 始终指向知识库根目录，不随平台或语言切换而改变；必须是绝对路径。
+- `platform` 与 `language` 只保存用户当前选择的目录标识，不保存平台/语言子目录路径。
+- 可用平台从知识库 `commands/platforms/` 实际目录动态发现；可用语言从所选平台实际存在的语言目录动态发现。主程序不得硬编码平台或语言清单。
+- `lcmd platform`、`lcmd language` 显示当前选择和知识库实际提供的可用值；切换前验证目标目录存在且结构有效，成功后只修改相应配置值。
+- 如果目标平台不提供当前语言，明确列出该平台可用语言并要求用户选择；不得静默切换语言、平台或知识库路径。
 - 未设置 path 时使用 platformdirs.user_data_path() 下的默认知识库目录。
 - 缓存和更新临时文件使用 platformdirs.user_cache_path()；配置目录使用 platformdirs.user_config_path()。
 - 安装程序首次安装时检测运行平台和系统语言，生成初始配置。主程序运行时读取配置，不反复检测系统语言或擅自更改平台。
