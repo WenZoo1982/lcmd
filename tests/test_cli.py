@@ -306,3 +306,99 @@ def test_cli_warns_when_command_is_not_in_knowledge(monkeypatch):
     assert len(warnings) == 1
     assert "知识库尚未收录该命令" in warnings[0]
     assert "unknown-command" in warnings[0]
+
+
+def test_cli_search_displays_command_names_and_summaries(monkeypatch):
+    """搜索结果只显示命令名称和用途，不显示完整正文."""
+    commands = [
+        SimpleNamespace(
+            name="cp",
+            metadata={"summary": "复制文件和目录。"},
+            body="详细语法和示例内容。",
+        ),
+        SimpleNamespace(
+            name="robocopy",
+            metadata={"summary": "复制目录及其内容。"},
+            body="其他详细说明。",
+        ),
+    ]
+    knowledge = SimpleNamespace(
+        commands=commands,
+        diagnostics=[],
+    )
+    outputs = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: object())
+    monkeypatch.setattr(cli_app, "load_knowledge", lambda config: knowledge)
+    monkeypatch.setattr(cli_app, "print_markdown", outputs.append)
+
+    result = runner.invoke(cli_app.app, ["search", "复制"])
+
+    assert result.exit_code == 0
+    assert len(outputs) == 1
+    assert "找到 2 条相关命令" in outputs[0]
+    assert "`cp`" in outputs[0]
+    assert "复制文件和目录。" in outputs[0]
+    assert "`robocopy`" in outputs[0]
+    assert "复制目录及其内容。" in outputs[0]
+    assert "详细语法和示例内容" not in outputs[0]
+    assert "其他详细说明" not in outputs[0]
+
+
+def test_cli_search_passes_full_option(monkeypatch):
+    """CLI 应将 --full 选项传递给搜索模块."""
+    knowledge = SimpleNamespace(
+        commands=[],
+        diagnostics=[],
+    )
+    calls = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: object())
+    monkeypatch.setattr(cli_app, "load_knowledge", lambda config: knowledge)
+    monkeypatch.setattr(
+        cli_app,
+        "search_commands",
+        lambda commands, query, full=False: calls.append((commands, query, full)) or [],
+    )
+    monkeypatch.setattr(cli_app, "print_warning", lambda message: None)
+
+    result = runner.invoke(
+        cli_app.app,
+        ["search", "复制文件", "--full"],
+    )
+
+    assert result.exit_code == 0
+    assert len(calls) == 1
+    assert calls[0] == (knowledge.commands, "复制文件", True)
+
+
+def test_cli_search_displays_no_result_message(monkeypatch):
+    """搜索无结果时应显示明确的重试提示."""
+    knowledge = SimpleNamespace(
+        commands=[],
+        diagnostics=[],
+    )
+    warnings = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: object())
+    monkeypatch.setattr(cli_app, "load_knowledge", lambda config: knowledge)
+    monkeypatch.setattr(cli_app, "search_commands", lambda *args, **kwargs: [])
+    monkeypatch.setattr(cli_app, "print_warning", warnings.append)
+
+    result = runner.invoke(
+        cli_app.app,
+        ["search", "不存在的功能"],
+    )
+
+    assert result.exit_code == 0
+    assert len(warnings) == 1
+    assert "未找到匹配的命令" in warnings[0]
+    assert "--full" in warnings[0]
+
+
+def test_cli_help_lists_search_command():
+    """主帮助信息应列出 search 子命令."""
+    result = runner.invoke(cli_app.app, ["--help"])
+
+    assert result.exit_code == 0
+    assert "search" in result.stdout

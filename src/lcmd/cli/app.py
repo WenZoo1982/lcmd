@@ -13,6 +13,7 @@ from lcmd.knowledge.loader import (
     load_knowledge_version,
 )
 from lcmd.knowledge.lookup import find_command
+from lcmd.knowledge.search import search_commands
 from lcmd.output.renderer import print_error, print_markdown, print_warning
 
 
@@ -96,6 +97,51 @@ def main(
 
     for diagnostic in knowledge.diagnostics:
         print_warning(f"{diagnostic.path}：{diagnostic.message}")
+
+
+@app.command()
+def search(
+    ctx: typer.Context,
+    query: str = typer.Argument(
+        ...,
+        help="要搜索的功能或关键词。",
+    ),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="扩大搜索范围，额外搜索 Markdown 正文。",
+    ),
+) -> None:
+    """通过功能关键词搜索命令."""
+    results = search_commands(
+        ctx.obj.commands,
+        query,
+        full=full,
+    )
+
+    if not results:
+        print_warning(
+            "未找到匹配的命令。请尝试使用更简短、准确的关键词重新搜索，"
+            "也可以使用 `--full` 扩大搜索范围。"
+        )
+        return
+
+    lines = [
+        f"# 搜索结果：{query}",
+        "",
+        f"找到 {len(results)} 条相关命令",
+        "",
+    ]
+
+    for command in results:
+        lines.extend(
+            [
+                f"- **`{command.name}`**",
+                f"  {command.metadata['summary']}",
+            ]
+        )
+
+    print_markdown("\n".join(lines))
 
 
 @app.command(
