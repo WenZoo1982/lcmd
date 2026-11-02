@@ -75,7 +75,7 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
 命令文档使用 UTF-8 Markdown + TOML Front Matter：
 
 - 必填 summary：非空字符串。
-- 不设置 keywords、aliases；搜索直接覆盖文件名、summary 和 Markdown 正文。
+- 所有 Markdown 文档（包括工具 `index.md` 导航页、平台命令文档、工具子命令文档及简单工具综合文档）均必须提供非空 `summary`。不设置 `keywords`、`aliases`；搜索字段由目录/文件路径推导，并从文档提取 summary 和正文内容。
 - 命令名称、平台、语言从目录和文件名推导。
 - Parser 负责解析 Front Matter；Validator 负责 Schema 校验；Loader 负责发现、加载命令文档和汇总诊断。
 - 单篇文档错误隔离：跳过无效文档并报告路径和原因，其他有效文档继续加载；知识库根目录、manifest 或兼容性错误属于整体错误。
@@ -137,7 +137,7 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
 | lcmd <command> | 查询当前配置平台的系统命令或第三方工具文档 |
 | lcmd <tool> <subcommand...> | 查询工具的子命令详细文档，支持规范定义的多级路径 |
 | lcmd <command> --full | 扩展资料入口，具体行为待对应阶段实现 |
-| lcmd search <keyword> | 搜索命令文档；支持用任务描述检索相关命令 |
+| `lcmd search <keyword>` | 使用简短关键词搜索当前平台和语言下的命令/工具文档；结果按相关度排序，必要时分页 |
 | lcmd platform [name] | 查看或切换知识平台 |
 | lcmd language [name] | 查看或切换知识语言 |
 | lcmd --update | 统一检查并更新主程序、知识库 |
@@ -146,6 +146,7 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
 - 平台系统命令从 `platforms/<selected-platform>/<selected-language>/` 查询；第三方工具从 `tools/<tool>/<selected-language>/` 查询。
 - 工具导航页与子命令详细页按通用文档类型和路径规则识别，不得按具体工具名称分支判断。
 - 不检查系统命令或第三方工具是否安装，不执行用户输入；普通查询不联网。
+- `lcmd <command>` 和 `lcmd <tool> <subcommand...>` 是精确文档查询，不进入搜索分页；只有 `lcmd search <keyword>` 的搜索结果超过分页阈值时才可能启动分页。
 
 ## 7. 统一更新机制
 
