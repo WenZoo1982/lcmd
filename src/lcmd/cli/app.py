@@ -7,13 +7,26 @@ from typer.core import TyperGroup
 
 from lcmd import __version__
 from lcmd.core.config import ConfigError, load_config
-from lcmd.knowledge.loader import KnowledgeLoadError, load_knowledge
+from lcmd.knowledge.loader import (
+    KnowledgeLoadError,
+    load_knowledge,
+    load_knowledge_version,
+)
 from lcmd.knowledge.lookup import find_command
 from lcmd.output.renderer import print_error, print_markdown, print_warning
 
 
 class LCMDGroup(TyperGroup):
     """支持直接查询命令名称的 Typer 命令组."""
+
+    def get_help_option(self, ctx: typer.Context) -> Any:
+        """将默认帮助选项的英文提示改为中文."""
+        option = super().get_help_option(ctx)
+
+        if option is not None:
+            option.help = "显示此帮助信息并退出。"
+
+        return option
 
     def resolve_command(
         self,
@@ -61,7 +74,15 @@ def main(
 ) -> None:
     """LCMD 命令行入口."""
     if version:
-        typer.echo(f"LCMD {__version__}")
+        typer.echo(f"LCMD 主程序版本：{__version__}")
+
+        try:
+            config = load_config()
+            knowledge_version = load_knowledge_version(config)
+            typer.echo(f"LCMD 知识库版本：{knowledge_version}")
+        except (ConfigError, KnowledgeLoadError) as exc:
+            typer.echo(f"LCMD 知识库版本：不可用（{exc}）")
+
         raise typer.Exit()
 
     try:

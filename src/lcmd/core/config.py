@@ -11,7 +11,7 @@ from pathlib import Path
 from platformdirs import user_config_path
 
 SUPPORTED_PLATFORMS = {"windows", "linux", "macos"}
-SUPPORTED_LANGUAGES = {"zh-CN"}
+SUPPORTED_LANGUAGES = {"zh-CN", "en-US"}
 
 
 class ConfigError(Exception):

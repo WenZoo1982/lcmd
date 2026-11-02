@@ -7,7 +7,11 @@ import pytest
 
 from lcmd.core.config import AppConfig
 from lcmd.core.paths import KnowledgeDirs
-from lcmd.knowledge.loader import KnowledgeLoadError, load_knowledge
+from lcmd.knowledge.loader import (
+    KnowledgeLoadError,
+    load_knowledge,
+    load_knowledge_version,
+)
 
 
 @pytest.fixture
@@ -44,6 +48,25 @@ def knowledge_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "dirs": dirs,
         "config": AppConfig(platform="linux", language="zh-CN"),
     }
+
+
+def test_load_knowledge_version(knowledge_env):
+    """应只读取并返回知识库清单中的版本."""
+    version = load_knowledge_version(knowledge_env["config"])
+
+    assert version == "0.1.0"
+
+
+def test_load_knowledge_version_does_not_load_markdown(knowledge_env):
+    """读取知识库版本时不应加载 Markdown 文档."""
+    (knowledge_env["commands"] / "invalid.md").write_text(
+        "这不是有效的知识文档格式",
+        encoding="utf-8",
+    )
+
+    version = load_knowledge_version(knowledge_env["config"])
+
+    assert version == "0.1.0"
 
 
 def write_document(path: Path, summary: str, body: str) -> None:

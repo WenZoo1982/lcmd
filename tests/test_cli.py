@@ -32,28 +32,67 @@ def create_test_app() -> typer.Typer:
 
 
 def test_help() -> None:
-    """帮助参数应正常显示，且不初始化知识库."""
+    """帮助参数应正常显示中文提示，且不初始化知识库."""
     result = runner.invoke(cli_app.app, ["--help"])
 
     assert result.exit_code == 0
     assert "LCMD" in result.stdout
     assert "--version" in result.stdout
+    assert "显示此帮助信息并退出。" in result.stdout
+    assert "Show this message and exit." not in result.stdout
 
 
-def test_version() -> None:
-    """版本参数应显示当前程序版本."""
+def test_version(monkeypatch) -> None:
+    """长版本参数应显示主程序和知识库版本."""
+    monkeypatch.setattr(cli_app, "load_config", lambda: object())
+    monkeypatch.setattr(
+        cli_app,
+        "load_knowledge_version",
+        lambda config: "0.1.0",
+    )
+
     result = runner.invoke(cli_app.app, ["--version"])
 
     assert result.exit_code == 0
-    assert f"LCMD {__version__}" in result.stdout
+    assert f"LCMD 主程序版本：{__version__}" in result.stdout
+    assert "LCMD 知识库版本：0.1.0" in result.stdout
 
 
-def test_short_version() -> None:
-    """短版本参数应正常工作."""
+def test_short_version(monkeypatch) -> None:
+    """短版本参数应显示主程序和知识库版本."""
+    monkeypatch.setattr(cli_app, "load_config", lambda: object())
+    monkeypatch.setattr(
+        cli_app,
+        "load_knowledge_version",
+        lambda config: "0.1.0",
+    )
+
     result = runner.invoke(cli_app.app, ["-v"])
 
     assert result.exit_code == 0
-    assert f"LCMD {__version__}" in result.stdout
+    assert f"LCMD 主程序版本：{__version__}" in result.stdout
+    assert "LCMD 知识库版本：0.1.0" in result.stdout
+
+
+def test_version_when_knowledge_is_unavailable(monkeypatch) -> None:
+    """知识库不可用时仍应显示主程序版本和具体原因."""
+    monkeypatch.setattr(cli_app, "load_config", lambda: object())
+
+    def raise_load_error(config):
+        raise KnowledgeLoadError("知识库目录不存在")
+
+    monkeypatch.setattr(
+        cli_app,
+        "load_knowledge_version",
+        raise_load_error,
+    )
+
+    result = runner.invoke(cli_app.app, ["--version"])
+
+    assert result.exit_code == 0
+    assert f"LCMD 主程序版本：{__version__}" in result.stdout
+    assert "LCMD 知识库版本：不可用" in result.stdout
+    assert "知识库目录不存在" in result.stdout
 
 
 def test_initialization_loads_knowledge_into_context(monkeypatch) -> None:

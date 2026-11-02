@@ -103,6 +103,17 @@ def _load_manifest(root: Path) -> str:
     return version
 
 
+def load_knowledge_version(config: AppConfig) -> str:
+    """只读取本地知识库 manifest 版本，不加载 Markdown 文档."""
+    try:
+        dirs = get_knowledge_dirs(config)
+        root = validate_knowledge_root(dirs.root)
+    except PathError as exc:
+        raise KnowledgeLoadError(f"知识库根目录无效：{exc}") from exc
+
+    return _load_manifest(root)
+
+
 def _check_version_compatibility(knowledge_version: str) -> None:
     """只比较知识库与主程序的 Major 版本."""
     knowledge_major, _, _ = _parse_version(knowledge_version, "知识库")

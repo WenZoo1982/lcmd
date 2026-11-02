@@ -62,17 +62,18 @@ def test_load_config_creates_default_file(tmp_path, monkeypatch):
     }
 
 
-def test_load_config_reads_existing_file(tmp_path):
-    """应正确读取已有配置."""
+@pytest.mark.parametrize("language", ["zh-CN", "en-US"])
+def test_load_config_reads_existing_file(tmp_path, language):
+    """应正确读取支持的语言配置."""
     path = tmp_path / "config.toml"
     path.write_text(
-        '[knowledge]\nplatform = "linux"\nlanguage = "zh-CN"\n',
+        f'[knowledge]\nplatform = "linux"\nlanguage = "{language}"\n',
         encoding="utf-8",
     )
 
     assert config.load_config(path) == AppConfig(
         platform="linux",
-        language="zh-CN",
+        language=language,
     )
 
 
