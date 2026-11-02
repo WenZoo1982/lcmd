@@ -103,7 +103,7 @@ def test_custom_missing_path_does_not_fallback_to_default(monkeypatch, tmp_path)
 
 
 def test_get_knowledge_dirs_uses_config(monkeypatch, tmp_path):
-    """命令和任务目录应根据知识库路径、平台及语言配置推导."""
+    """命令目录应根据知识库路径、平台及语言配置推导."""
     knowledge_root = tmp_path / "knowledge"
     config = AppConfig(
         platform="windows",
@@ -116,7 +116,6 @@ def test_get_knowledge_dirs_uses_config(monkeypatch, tmp_path):
     assert result == KnowledgeDirs(
         root=knowledge_root,
         commands=knowledge_root / "commands" / "windows" / "zh-CN",
-        tasks=knowledge_root / "tasks" / "windows" / "zh-CN",
     )
 
 
@@ -128,7 +127,6 @@ def test_get_knowledge_dirs_uses_default_when_config_path_missing(monkeypatch, t
 
     assert result.root == tmp_path
     assert result.commands == tmp_path / "commands" / "linux" / "zh-CN"
-    assert result.tasks == tmp_path / "tasks" / "linux" / "zh-CN"
 
 
 def test_get_knowledge_dirs_does_not_create_directories(tmp_path):
@@ -139,5 +137,4 @@ def test_get_knowledge_dirs_does_not_create_directories(tmp_path):
     result = get_knowledge_dirs(config)
 
     assert result.commands == knowledge_root / "commands" / "linux" / "zh-CN"
-    assert result.tasks == knowledge_root / "tasks" / "linux" / "zh-CN"
     assert not result.root.exists()

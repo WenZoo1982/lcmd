@@ -100,7 +100,6 @@ def test_initialization_loads_knowledge_into_context(monkeypatch) -> None:
     config = object()
     knowledge = SimpleNamespace(
         commands=[],
-        tasks=[],
         diagnostics=[],
     )
     calls = []
@@ -148,7 +147,6 @@ def test_initialization_displays_document_diagnostics(monkeypatch) -> None:
     )
     knowledge = SimpleNamespace(
         commands=[],
-        tasks=[],
         diagnostics=[diagnostic],
     )
     warnings = []
@@ -223,7 +221,6 @@ def test_cli_displays_matching_command(monkeypatch):
     )
     knowledge = SimpleNamespace(
         commands=[command],
-        tasks=[],
         diagnostics=[],
     )
     markdown_outputs = []
@@ -259,7 +256,6 @@ def test_cli_command_lookup_is_case_insensitive(monkeypatch):
     )
     knowledge = SimpleNamespace(
         commands=[command],
-        tasks=[],
         diagnostics=[],
     )
     markdown_outputs = []
@@ -288,7 +284,6 @@ def test_cli_warns_when_command_is_not_in_knowledge(monkeypatch):
     """知识库没有对应命令时应明确提示."""
     knowledge = SimpleNamespace(
         commands=[],
-        tasks=[],
         diagnostics=[],
     )
     warnings = []

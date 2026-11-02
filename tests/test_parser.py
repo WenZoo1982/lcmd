@@ -15,27 +15,6 @@ def test_parse_command_document():
     assert result.body == "# cp\n\n复制文件和目录。\n"
 
 
-def test_parse_task_document():
-    """应正确解析任务文档及命令关联数组."""
-    content = (
-        "+++\n"
-        'summary = "查找占用磁盘空间较大的文件。"\n'
-        'commands = ["find", "du", "sort"]\n'
-        "+++\n"
-        "# 查找大文件\n"
-        "\n"
-        "使用 find 和 du 查找大文件。\n"
-    )
-
-    result = parse_document(content)
-
-    assert result.metadata == {
-        "summary": "查找占用磁盘空间较大的文件。",
-        "commands": ["find", "du", "sort"],
-    }
-    assert result.body == "# 查找大文件\n\n使用 find 和 du 查找大文件。\n"
-
-
 def test_parse_document_supports_crlf():
     """应支持 Windows CRLF 换行."""
     content = '+++\r\nsummary = "显示文件内容。"\r\n+++\r\n# cat\r\n\r\n显示文件内容。\r\n'

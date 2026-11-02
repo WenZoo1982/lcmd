@@ -18,7 +18,6 @@ class KnowledgeDirs:
 
     root: Path
     commands: Path
-    tasks: Path
 
 
 def get_default_knowledge_dir() -> Path:
@@ -56,11 +55,10 @@ def validate_knowledge_root(path: Path | str) -> Path:
 
 
 def get_knowledge_dirs(config: AppConfig) -> KnowledgeDirs:
-    """根据平台和语言配置推导命令及任务目录."""
+    """根据平台和语言配置推导命令目录."""
     root = get_knowledge_root(config)
 
     return KnowledgeDirs(
         root=root,
         commands=root / "commands" / config.platform / config.language,
-        tasks=root / "tasks" / config.platform / config.language,
     )

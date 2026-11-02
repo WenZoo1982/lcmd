@@ -21,11 +21,9 @@ def knowledge_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     root = tmp_path / "knowledge"
     commands = root / "commands" / "linux" / "zh-CN"
-    tasks = root / "tasks" / "linux" / "zh-CN"
 
     root.mkdir()
     commands.mkdir(parents=True)
-    tasks.mkdir(parents=True)
 
     (root / "manifest.json").write_text(
         json.dumps({"version": "0.1.0"}),
@@ -35,7 +33,6 @@ def knowledge_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     dirs = KnowledgeDirs(
         root=root,
         commands=commands,
-        tasks=tasks,
     )
 
     monkeypatch.setattr(loader, "get_knowledge_dirs", lambda config: dirs)
@@ -44,7 +41,6 @@ def knowledge_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return {
         "root": root,
         "commands": commands,
-        "tasks": tasks,
         "dirs": dirs,
         "config": AppConfig(platform="linux", language="zh-CN"),
     }
@@ -92,26 +88,6 @@ def test_load_valid_command_document(knowledge_env):
     assert result.commands[0].metadata["summary"] == "查看目录中的文件和文件夹"
     assert "`ls [选项] [目录]`" in result.commands[0].body
     assert result.commands[0].path == knowledge_env["commands"] / "ls.md"
-    assert result.tasks == []
-    assert result.diagnostics == []
-
-
-def test_load_valid_task_document(knowledge_env):
-    """有效任务文档应被正确加载."""
-    write_document(
-        knowledge_env["tasks"] / "list-files.md",
-        "查看目录中的文件",
-        "## 操作步骤\n\n使用 ls 命令查看目录内容。",
-    )
-
-    result = load_knowledge(knowledge_env["config"])
-
-    assert result.commands == []
-    assert len(result.tasks) == 1
-    assert result.tasks[0].name == "list-files"
-    assert result.tasks[0].metadata["summary"] == "查看目录中的文件"
-    assert result.tasks[0].metadata["commands"] == []
-    assert "使用 ls 命令" in result.tasks[0].body
     assert result.diagnostics == []
 
 
@@ -137,40 +113,14 @@ def test_missing_command_directory_is_allowed(knowledge_env):
     result = load_knowledge(knowledge_env["config"])
 
     assert result.commands == []
-    assert result.tasks == []
     assert result.diagnostics == []
 
 
-def test_missing_task_directory_is_allowed(knowledge_env):
-    """任务目录不存在时仍应允许加载命令文档."""
-    write_document(knowledge_env["commands"] / "ls.md", "查看目录内容", "正文")
-    knowledge_env["tasks"].rmdir()
-
-    result = load_knowledge(knowledge_env["config"])
-
-    assert [document.name for document in result.commands] == ["ls"]
-    assert result.tasks == []
-    assert result.diagnostics == []
-
-
-def test_both_document_directories_missing_are_allowed(knowledge_env):
-    """命令目录和任务目录均不存在时仍应允许加载."""
-    knowledge_env["commands"].rmdir()
-    knowledge_env["tasks"].rmdir()
-
+def test_empty_command_directory_is_allowed(knowledge_env):
+    """命令目录为空时不应报错."""
     result = load_knowledge(knowledge_env["config"])
 
     assert result.commands == []
-    assert result.tasks == []
-    assert result.diagnostics == []
-
-
-def test_empty_document_directories_are_allowed(knowledge_env):
-    """命令目录和任务目录为空时不应报错."""
-    result = load_knowledge(knowledge_env["config"])
-
-    assert result.commands == []
-    assert result.tasks == []
     assert result.diagnostics == []
 
 
@@ -313,7 +263,6 @@ def test_same_major_version_is_compatible(
     result = load_knowledge(knowledge_env["config"])
 
     assert result.commands == []
-    assert result.tasks == []
 
 
 def test_older_knowledge_major_version_raises_error(knowledge_env):
@@ -356,7 +305,6 @@ def test_missing_knowledge_root_raises_knowledge_load_error(
     missing_dirs = KnowledgeDirs(
         root=missing_root,
         commands=missing_root / "commands",
-        tasks=missing_root / "tasks",
     )
     monkeypatch_dirs = loader.get_knowledge_dirs
     try:
@@ -380,7 +328,6 @@ def test_knowledge_root_is_file_raises_knowledge_load_error(
     file_dirs = KnowledgeDirs(
         root=file_root,
         commands=file_root / "commands",
-        tasks=file_root / "tasks",
     )
     monkeypatch_dirs = loader.get_knowledge_dirs
     try:
@@ -425,24 +372,6 @@ def test_platform_command_takes_priority_over_common(knowledge_env):
     assert result.commands[0].path == knowledge_env["commands"] / "git.md"
 
 
-def test_load_common_task_when_platform_task_missing(knowledge_env):
-    """平台没有对应任务时应回退加载 common 文档."""
-    common_dir = knowledge_env["root"] / "tasks" / "common" / "zh-CN"
-    common_dir.mkdir(parents=True)
-
-    write_document(
-        common_dir / "list-files.md",
-        "通用文件列表操作",
-        "通用操作步骤",
-    )
-
-    result = load_knowledge(knowledge_env["config"])
-
-    assert [document.name for document in result.tasks] == ["list-files"]
-    assert result.tasks[0].metadata["summary"] == "通用文件列表操作"
-    assert result.tasks[0].path == common_dir / "list-files.md"
-
-
 def test_common_fills_commands_missing_from_platform(knowledge_env):
     """common 应补充平台目录中没有的命令."""
     common_dir = knowledge_env["root"] / "commands" / "common" / "zh-CN"
@@ -462,32 +391,3 @@ def test_common_fills_commands_missing_from_platform(knowledge_env):
     assert set(documents) == {"git", "ls"}
     assert documents["git"].metadata["summary"] == "通用 Git"
     assert documents["ls"].metadata["summary"] == "Linux ls"
-
-
-def test_common_fills_tasks_missing_from_platform(knowledge_env):
-    """common 应补充平台目录中没有的任务，平台同名任务优先."""
-    common_dir = knowledge_env["root"] / "tasks" / "common" / "zh-CN"
-    common_dir.mkdir(parents=True)
-
-    write_document(
-        common_dir / "list-files.md",
-        "通用文件列表操作",
-        "通用操作步骤",
-    )
-    write_document(
-        common_dir / "search-files.md",
-        "通用文件搜索",
-        "通用搜索步骤",
-    )
-    write_document(
-        knowledge_env["tasks"] / "list-files.md",
-        "Linux 文件列表操作",
-        "Linux 专属操作步骤",
-    )
-
-    result = load_knowledge(knowledge_env["config"])
-    documents = {doc.name: doc for doc in result.tasks}
-
-    assert set(documents) == {"list-files", "search-files"}
-    assert documents["list-files"].metadata["summary"] == "Linux 文件列表操作"
-    assert documents["search-files"].metadata["summary"] == "通用文件搜索"
