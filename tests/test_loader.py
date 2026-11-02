@@ -367,3 +367,104 @@ def test_knowledge_root_is_file_raises_knowledge_load_error(
             load_knowledge(knowledge_env["config"])
     finally:
         loader.get_knowledge_dirs = monkeypatch_dirs
+
+
+def test_load_common_command_when_platform_command_missing(knowledge_env):
+    """平台没有对应命令时应回退加载 common 文档."""
+    common_dir = knowledge_env["root"] / "commands" / "common" / "zh-CN"
+    common_dir.mkdir(parents=True)
+
+    write_document(common_dir / "git.md", "版本控制工具", "Git 通用说明")
+
+    result = load_knowledge(knowledge_env["config"])
+
+    assert [document.name for document in result.commands] == ["git"]
+    assert result.commands[0].metadata["summary"] == "版本控制工具"
+    assert result.commands[0].path == common_dir / "git.md"
+
+
+def test_platform_command_takes_priority_over_common(knowledge_env):
+    """平台与 common 存在同名命令时只加载平台文档."""
+    common_dir = knowledge_env["root"] / "commands" / "common" / "zh-CN"
+    common_dir.mkdir(parents=True)
+
+    write_document(common_dir / "git.md", "通用 Git 说明", "Common Git")
+    write_document(
+        knowledge_env["commands"] / "git.md",
+        "Linux Git 说明",
+        "Linux Git",
+    )
+
+    result = load_knowledge(knowledge_env["config"])
+
+    assert [document.name for document in result.commands] == ["git"]
+    assert result.commands[0].metadata["summary"] == "Linux Git 说明"
+    assert result.commands[0].path == knowledge_env["commands"] / "git.md"
+
+
+def test_load_common_task_when_platform_task_missing(knowledge_env):
+    """平台没有对应任务时应回退加载 common 文档."""
+    common_dir = knowledge_env["root"] / "tasks" / "common" / "zh-CN"
+    common_dir.mkdir(parents=True)
+
+    write_document(
+        common_dir / "list-files.md",
+        "通用文件列表操作",
+        "通用操作步骤",
+    )
+
+    result = load_knowledge(knowledge_env["config"])
+
+    assert [document.name for document in result.tasks] == ["list-files"]
+    assert result.tasks[0].metadata["summary"] == "通用文件列表操作"
+    assert result.tasks[0].path == common_dir / "list-files.md"
+
+
+def test_common_fills_commands_missing_from_platform(knowledge_env):
+    """common 应补充平台目录中没有的命令."""
+    common_dir = knowledge_env["root"] / "commands" / "common" / "zh-CN"
+    common_dir.mkdir(parents=True)
+
+    write_document(common_dir / "git.md", "通用 Git", "Common Git")
+    write_document(common_dir / "ls.md", "通用 ls", "Common ls")
+    write_document(
+        knowledge_env["commands"] / "ls.md",
+        "Linux ls",
+        "Linux ls",
+    )
+
+    result = load_knowledge(knowledge_env["config"])
+    documents = {doc.name: doc for doc in result.commands}
+
+    assert set(documents) == {"git", "ls"}
+    assert documents["git"].metadata["summary"] == "通用 Git"
+    assert documents["ls"].metadata["summary"] == "Linux ls"
+
+
+def test_common_fills_tasks_missing_from_platform(knowledge_env):
+    """common 应补充平台目录中没有的任务，平台同名任务优先."""
+    common_dir = knowledge_env["root"] / "tasks" / "common" / "zh-CN"
+    common_dir.mkdir(parents=True)
+
+    write_document(
+        common_dir / "list-files.md",
+        "通用文件列表操作",
+        "通用操作步骤",
+    )
+    write_document(
+        common_dir / "search-files.md",
+        "通用文件搜索",
+        "通用搜索步骤",
+    )
+    write_document(
+        knowledge_env["tasks"] / "list-files.md",
+        "Linux 文件列表操作",
+        "Linux 专属操作步骤",
+    )
+
+    result = load_knowledge(knowledge_env["config"])
+    documents = {doc.name: doc for doc in result.tasks}
+
+    assert set(documents) == {"list-files", "search-files"}
+    assert documents["list-files"].metadata["summary"] == "Linux 文件列表操作"
+    assert documents["search-files"].metadata["summary"] == "通用文件搜索"

@@ -47,7 +47,6 @@ class KnowledgeLoadResult:
     diagnostics: list[LoadDiagnostic]
 
 
-# SemVer 2.0.0 格式。
 _SEMVER_PATTERN = re.compile(
     r"^(0|[1-9]\d*)"
     r"\.(0|[1-9]\d*)"
@@ -106,14 +105,8 @@ def _load_manifest(root: Path) -> str:
 
 def _check_version_compatibility(knowledge_version: str) -> None:
     """只比较知识库与主程序的 Major 版本."""
-    knowledge_major, _, _ = _parse_version(
-        knowledge_version,
-        "知识库",
-    )
-    app_major, _, _ = _parse_version(
-        __version__,
-        "主程序",
-    )
+    knowledge_major, _, _ = _parse_version(knowledge_version, "知识库")
+    app_major, _, _ = _parse_version(__version__, "主程序")
 
     if knowledge_major < app_major:
         raise KnowledgeLoadError(
@@ -187,7 +180,7 @@ def _load_documents(
 
 
 def load_knowledge(config: AppConfig) -> KnowledgeLoadResult:
-    """加载当前配置对应的平台和语言知识文档."""
+    """加载当前平台知识文档，缺少的文档逐项回退到 common."""
     try:
         dirs = get_knowledge_dirs(config)
         root = validate_knowledge_root(dirs.root)
@@ -197,17 +190,45 @@ def load_knowledge(config: AppConfig) -> KnowledgeLoadResult:
     knowledge_version = _load_manifest(root)
     _check_version_compatibility(knowledge_version)
 
-    commands, command_diagnostics = _load_documents(
+    common_commands = root / "commands" / "common" / config.language
+    common_tasks = root / "tasks" / "common" / config.language
+
+    platform_commands, command_diagnostics = _load_documents(
         dirs.commands,
         "command",
     )
-    tasks, task_diagnostics = _load_documents(
+    common_command_docs, common_command_diagnostics = _load_documents(
+        common_commands,
+        "command",
+    )
+
+    platform_tasks, task_diagnostics = _load_documents(
         dirs.tasks,
         "task",
     )
+    common_task_docs, common_task_diagnostics = _load_documents(
+        common_tasks,
+        "task",
+    )
+
+    # 平台文档优先；common 只补充平台缺少的同名文档。
+    command_names = {doc.name.casefold() for doc in platform_commands}
+    commands = platform_commands + [
+        doc for doc in common_command_docs if doc.name.casefold() not in command_names
+    ]
+
+    task_names = {doc.name.casefold() for doc in platform_tasks}
+    tasks = platform_tasks + [
+        doc for doc in common_task_docs if doc.name.casefold() not in task_names
+    ]
 
     return KnowledgeLoadResult(
         commands=commands,
         tasks=tasks,
-        diagnostics=command_diagnostics + task_diagnostics,
+        diagnostics=(
+            command_diagnostics
+            + common_command_diagnostics
+            + task_diagnostics
+            + common_task_diagnostics
+        ),
     )

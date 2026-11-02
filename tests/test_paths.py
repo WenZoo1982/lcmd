@@ -21,43 +21,43 @@ def test_get_default_knowledge_dir_uses_platformdirs(monkeypatch, tmp_path):
     assert get_default_knowledge_dir() == tmp_path / "knowledge"
 
 
-def test_get_knowledge_root_uses_default_when_env_missing(monkeypatch, tmp_path):
-    """未设置环境变量时应使用默认目录."""
-    monkeypatch.delenv("LCMD_KNOWLEDGE_DIR", raising=False)
+def test_get_knowledge_root_uses_default_when_config_path_missing(monkeypatch, tmp_path):
+    """配置未指定知识库路径时应使用默认目录."""
     monkeypatch.setattr(paths, "get_default_knowledge_dir", lambda: tmp_path)
 
-    assert get_knowledge_root() == tmp_path
+    result = get_knowledge_root(AppConfig(platform="linux"))
+
+    assert result == tmp_path
 
 
-def test_get_knowledge_root_uses_environment_variable(monkeypatch, tmp_path):
-    """环境变量应覆盖默认目录."""
-    monkeypatch.setenv("LCMD_KNOWLEDGE_DIR", str(tmp_path))
+def test_get_knowledge_root_uses_config_path(tmp_path):
+    """配置指定知识库路径时应使用自定义目录."""
+    knowledge_root = tmp_path / "custom-knowledge"
+    config = AppConfig(platform="linux", path=knowledge_root)
 
-    assert get_knowledge_root() == tmp_path.resolve()
-
-
-def test_get_knowledge_root_rejects_empty_environment_variable(monkeypatch):
-    """环境变量为空时应明确报错."""
-    monkeypatch.setenv("LCMD_KNOWLEDGE_DIR", "")
-
-    with pytest.raises(PathError, match="不能为空"):
-        get_knowledge_root()
+    assert get_knowledge_root(config) == knowledge_root
 
 
-def test_get_knowledge_root_rejects_whitespace_environment_variable(monkeypatch):
-    """环境变量只有空白字符时应明确报错."""
-    monkeypatch.setenv("LCMD_KNOWLEDGE_DIR", "   ")
+def test_get_knowledge_root_ignores_environment_variable(monkeypatch, tmp_path):
+    """旧环境变量不得覆盖配置中的知识库路径."""
+    default_root = tmp_path / "default"
+    environment_root = tmp_path / "environment"
 
-    with pytest.raises(PathError, match="不能为空"):
-        get_knowledge_root()
+    monkeypatch.setattr(paths, "get_default_knowledge_dir", lambda: default_root)
+    monkeypatch.setenv("LCMD_KNOWLEDGE_DIR", str(environment_root))
+
+    assert get_knowledge_root(AppConfig(platform="linux")) == default_root
 
 
-def test_get_knowledge_root_resolves_relative_path(monkeypatch, tmp_path):
-    """相对路径应根据当前工作目录解析."""
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("LCMD_KNOWLEDGE_DIR", "my-knowledge")
+def test_get_knowledge_root_prefers_config_path_over_environment_variable(monkeypatch, tmp_path):
+    """配置中的自定义路径应优先于旧环境变量."""
+    config_root = tmp_path / "config-knowledge"
+    environment_root = tmp_path / "environment-knowledge"
 
-    assert get_knowledge_root() == (tmp_path / "my-knowledge").resolve()
+    monkeypatch.setenv("LCMD_KNOWLEDGE_DIR", str(environment_root))
+    config = AppConfig(platform="linux", path=config_root)
+
+    assert get_knowledge_root(config) == config_root
 
 
 def test_validate_knowledge_root_accepts_existing_directory(tmp_path):
@@ -85,35 +85,59 @@ def test_validate_knowledge_root_rejects_file(tmp_path):
         validate_knowledge_root(root)
 
 
-def test_validate_knowledge_root_uses_environment_variable(monkeypatch, tmp_path):
-    """未传入路径时应验证环境变量指定的目录."""
-    root = tmp_path / "knowledge"
-    root.mkdir()
-    monkeypatch.setenv("LCMD_KNOWLEDGE_DIR", str(root))
+def test_custom_missing_path_does_not_fallback_to_default(monkeypatch, tmp_path):
+    """自定义目录不存在时应报错，不得回退默认目录."""
+    default_root = tmp_path / "default"
+    custom_root = tmp_path / "missing-custom"
 
-    assert validate_knowledge_root() == root.resolve()
+    default_root.mkdir()
+    monkeypatch.setattr(paths, "get_default_knowledge_dir", lambda: default_root)
+
+    config = AppConfig(platform="linux", path=custom_root)
+    selected_root = get_knowledge_root(config)
+
+    assert selected_root == custom_root
+
+    with pytest.raises(PathError, match="目录不存在"):
+        validate_knowledge_root(selected_root)
 
 
 def test_get_knowledge_dirs_uses_config(monkeypatch, tmp_path):
-    """命令和任务目录应根据平台及语言配置推导."""
-    monkeypatch.setenv("LCMD_KNOWLEDGE_DIR", str(tmp_path))
-    config = AppConfig(platform="windows", language="zh-CN")
+    """命令和任务目录应根据知识库路径、平台及语言配置推导."""
+    knowledge_root = tmp_path / "knowledge"
+    config = AppConfig(
+        platform="windows",
+        language="zh-CN",
+        path=knowledge_root,
+    )
 
     result = get_knowledge_dirs(config)
 
     assert result == KnowledgeDirs(
-        root=tmp_path.resolve(),
-        commands=tmp_path / "commands" / "windows" / "zh-CN",
-        tasks=tmp_path / "tasks" / "windows" / "zh-CN",
+        root=knowledge_root,
+        commands=knowledge_root / "commands" / "windows" / "zh-CN",
+        tasks=knowledge_root / "tasks" / "windows" / "zh-CN",
     )
 
 
-def test_get_knowledge_dirs_does_not_create_directories(monkeypatch, tmp_path):
-    """计算路径时不得自动创建知识库目录."""
-    monkeypatch.setenv("LCMD_KNOWLEDGE_DIR", str(tmp_path / "knowledge"))
+def test_get_knowledge_dirs_uses_default_when_config_path_missing(monkeypatch, tmp_path):
+    """未指定自定义路径时应从默认知识库目录推导."""
+    monkeypatch.setattr(paths, "get_default_knowledge_dir", lambda: tmp_path)
 
     result = get_knowledge_dirs(AppConfig(platform="linux"))
 
-    assert result.commands == (tmp_path / "knowledge" / "commands" / "linux" / "zh-CN")
-    assert result.tasks == (tmp_path / "knowledge" / "tasks" / "linux" / "zh-CN")
+    assert result.root == tmp_path
+    assert result.commands == tmp_path / "commands" / "linux" / "zh-CN"
+    assert result.tasks == tmp_path / "tasks" / "linux" / "zh-CN"
+
+
+def test_get_knowledge_dirs_does_not_create_directories(tmp_path):
+    """计算路径时不得自动创建知识库目录."""
+    knowledge_root = tmp_path / "knowledge"
+    config = AppConfig(platform="linux", path=knowledge_root)
+
+    result = get_knowledge_dirs(config)
+
+    assert result.commands == knowledge_root / "commands" / "linux" / "zh-CN"
+    assert result.tasks == knowledge_root / "tasks" / "linux" / "zh-CN"
     assert not result.root.exists()

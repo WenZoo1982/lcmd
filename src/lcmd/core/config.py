@@ -1,5 +1,6 @@
 """LCMD 用户配置管理."""
 
+import json
 import os
 import sys
 import tempfile
@@ -23,6 +24,7 @@ class AppConfig:
 
     platform: str
     language: str = "zh-CN"
+    path: Path | None = None
 
 
 def get_config_path() -> Path:
@@ -60,6 +62,13 @@ def _validate_config(config: AppConfig) -> None:
         allowed = "、".join(sorted(SUPPORTED_LANGUAGES))
         raise ConfigError(f"不支持的语言：{config.language}。允许的值：{allowed}。")
 
+    if config.path is not None:
+        if not isinstance(config.path, Path):
+            raise ConfigError("配置项 knowledge.path 必须是 Path 类型。")
+
+        if not config.path.is_absolute():
+            raise ConfigError("配置项 knowledge.path 必须是绝对路径。")
+
 
 def _parse_config(data: dict) -> AppConfig:
     """解析并验证 TOML 配置数据."""
@@ -74,10 +83,23 @@ def _parse_config(data: dict) -> AppConfig:
     if "language" not in knowledge:
         raise ConfigError("配置文件缺少 knowledge.language 字段。")
 
+    knowledge_path = knowledge.get("path")
+
+    if knowledge_path is not None:
+        if not isinstance(knowledge_path, str):
+            raise ConfigError("配置项 knowledge.path 必须是字符串。")
+
+        knowledge_path = Path(knowledge_path)
+
+        if not knowledge_path.is_absolute():
+            raise ConfigError("配置项 knowledge.path 必须是绝对路径。")
+
     config = AppConfig(
         platform=knowledge["platform"],
         language=knowledge["language"],
+        path=knowledge_path,
     )
+
     _validate_config(config)
     return config
 
@@ -89,7 +111,14 @@ def save_config(config: AppConfig, path: Path | str | None = None) -> Path:
     config_path = Path(path) if path is not None else get_config_path()
     temporary_path: Path | None = None
 
-    content = f'[knowledge]\nplatform = "{config.platform}"\nlanguage = "{config.language}"\n'
+    content = (
+        f"[knowledge]\n"
+        f"platform = {json.dumps(config.platform)}\n"
+        f"language = {json.dumps(config.language)}\n"
+    )
+
+    if config.path is not None:
+        content += f"path = {json.dumps(str(config.path))}\n"
 
     try:
         config_path.parent.mkdir(parents=True, exist_ok=True)
@@ -121,7 +150,7 @@ def save_config(config: AppConfig, path: Path | str | None = None) -> Path:
 
 
 def load_config(path: Path | str | None = None) -> AppConfig:
-    """读取配置；文件不存在时自动创建默认配置."""
+    """读取配置；文件不存在时应创建默认配置."""
     config_path = Path(path) if path is not None else get_config_path()
 
     if not config_path.exists():

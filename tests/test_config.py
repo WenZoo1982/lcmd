@@ -1,6 +1,8 @@
 """LCMD 配置模块测试."""
 
+import json
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -74,6 +76,49 @@ def test_load_config_reads_existing_file(tmp_path):
     )
 
 
+def test_load_config_reads_absolute_knowledge_path(tmp_path):
+    """应正确读取绝对知识库路径."""
+    knowledge_path = tmp_path / "my knowledge"
+    path = tmp_path / "config.toml"
+    path.write_text(
+        "[knowledge]\n"
+        'platform = "linux"\n'
+        'language = "zh-CN"\n'
+        f"path = {json.dumps(str(knowledge_path))}\n",
+        encoding="utf-8",
+    )
+
+    assert config.load_config(path) == AppConfig(
+        platform="linux",
+        language="zh-CN",
+        path=knowledge_path,
+    )
+
+
+def test_load_config_rejects_relative_knowledge_path(tmp_path):
+    """知识库路径必须是绝对路径."""
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '[knowledge]\nplatform = "linux"\nlanguage = "zh-CN"\npath = "relative/knowledge"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError):
+        config.load_config(path)
+
+
+def test_load_config_rejects_non_string_knowledge_path(tmp_path):
+    """知识库路径必须是字符串."""
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '[knowledge]\nplatform = "linux"\nlanguage = "zh-CN"\npath = 123\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError):
+        config.load_config(path)
+
+
 def test_save_config_and_load_again(tmp_path):
     """保存后的配置应能重新读取."""
     path = tmp_path / "nested" / "config.toml"
@@ -83,6 +128,36 @@ def test_save_config_and_load_again(tmp_path):
 
     assert saved_path == path
     assert config.load_config(path) == expected
+
+
+def test_save_config_preserves_absolute_knowledge_path(tmp_path):
+    """保存后重新读取，知识库路径应保持一致."""
+    config_path = tmp_path / "config.toml"
+    knowledge_path = tmp_path / "自定义知识库目录"
+
+    expected = AppConfig(
+        platform="windows",
+        language="zh-CN",
+        path=knowledge_path,
+    )
+
+    config.save_config(expected, config_path)
+
+    assert config.load_config(config_path) == expected
+
+
+def test_save_config_rejects_relative_knowledge_path(tmp_path):
+    """保存配置时应拒绝相对知识库路径."""
+    config_path = tmp_path / "config.toml"
+    invalid_config = AppConfig(
+        platform="windows",
+        path=Path("relative/knowledge"),
+    )
+
+    with pytest.raises(ConfigError):
+        config.save_config(invalid_config, config_path)
+
+    assert not config_path.exists()
 
 
 def test_load_config_rejects_invalid_toml(tmp_path):
