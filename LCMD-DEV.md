@@ -523,7 +523,7 @@ lcmd-kb/
         │   └── en-US/
         ├── docker/
         │   ├── zh-CN/
-        │   │   ├── index.md
+        │   │   ├── docker.md
         │   │   ├── run.md
         │   │   ├── build.md
         │   │   └── ...
