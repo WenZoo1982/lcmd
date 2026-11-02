@@ -5,7 +5,7 @@
 - 主程序仓库：https://github.com/WenZoo1982/lcmd
 - 知识库仓库：https://github.com/WenZoo1982/lcmd-kb
 - 本地项目目录：D:\Project_DEV\lcmd
-- 当前开发阶段：P3.3 CLI 行为补齐；P3.2 配置路径与 common 回退已完成代码审查、测试验收、提交并推送
+- 当前开发阶段：P3.3 CLI 行为补齐（本地实现与自动化检查已通过，真实 CLI 验收进行中）；P3.2 已完成并推送
 - 首发目标：Windows x64、Linux AMD64；macOS 和 ARM64 暂不纳入首发。
 
 ---
@@ -259,42 +259,42 @@ LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心
 
 ### 当前真实状态（2026-11-02）
 
-#### 主程序代码
+#### 主程序远程仓库状态
 
-- 本地分支：`main`。
-- P3.2 代码提交：`22674fea7d03343a41bfeb7ef62966bb930647ab`。
-- 用户已成功执行 `git push origin main`，GitHub 返回 `be3ac2b..22674fe  main -> main`，确认代码已推送至远程 `main`。
-- 提交前用户执行 `git status --short`，工作区为空；提交后没有再产生代码修改。
-- 本地代码提交与本次总控文档更新分开处理；本次文档更新完成后，用户需要再 pull 文档提交。
+- 仓库：`WenZoo1982/lcmd`，默认分支：`main`。
+- 当前远程代码最新提交仍为 P3.2：`22674fea7d03343a41bfeb7ef62966bb930647ab`（`feat: support configurable knowledge paths and common fallback`）。
+- 最新远程文档提交：`ddf072b4a89a29f08fe0411e757ceb1e16173b12`（`docs: record P3.2 completion and start P3.3`）。
+- 本次只更新 `LCMD-DEV.md`，没有上传或修改用户本地 P3.3 主程序代码；远程代码仍不能视为包含当前 P3.3 实现。
+- 用户本地开发目录：`D:\Project_DEV\lcmd`。本地 P3.3 代码尚未推送；应先完成真实 CLI 验收，再按代码提交流程单独推送。
 
-#### P3.2 本地验收结果（由用户实际执行并反馈）
+#### P3.3 本地自动化与静态检查（用户实际执行并反馈）
 
-- `python -m pytest -q`：125 passed。
-- `ruff check .`：All checks passed。
-- `ruff format --check .`：25 files already formatted。
-- `git diff --check`：未发现空白错误；Git 对部分文件提示 LF/CRLF 换行符转换，不影响提交。
-- 真实 CLI 验收：Windows 专属 `where` 文档优先；common `git` 文档正确回退；未收录命令显示中文提示；`--version` 当前显示 `LCMD 0.1.0`。
-- `--help` 仍出现 Typer 默认英文提示 `Show this message and exit.`；版本和帮助文案问题留在 P3.3 处理。
-- 上述测试和 CLI 结果是用户在本地执行的记录；本次助手没有在 GitHub 远程执行测试。
+- 全量测试：`pytest -q`，129 passed。
+- Ruff：`ruff check .`，`All checks passed!`。
+- 格式检查：`ruff format --check .`，`25 files already formatted`。
+- 上述结果由用户在本地执行并反馈；不代表 GitHub 远程代码已运行这些检查。
 
-### P3.2 已完成的交付内容
+#### P3.3 真实 CLI 验收记录
 
-1. `AppConfig` 增加可选 `knowledge.path`，只接受绝对路径，支持 TOML 读取和保存。
-2. 默认知识库路径使用 platformdirs；不再读取 `LCMD_KNOWLEDGE_DIR` 环境变量。
-3. 路径计算不自动创建知识库目录；自定义路径无效时明确报错，不回退默认目录。
-4. commands 和 tasks 均实现平台专属文档优先、common 逐项补充；同名文档不重复加载。
-5. 六个源码/测试文件已完成差异审查；代码独立提交并推送，提交为 `22674fe`。
-6. P3.2 已完成，不再重复运行已通过的测试；除非后续发现具体问题，否则不回头扩展本阶段范围。
+- `.\.venv\Scripts\lcmd.exe --version`：已通过。
+- 实际输出：
 
-### 下一阶段：P3.3 CLI 行为补齐
+      LCMD 主程序版本：0.1.0
+      LCMD 知识库版本：0.1.0
 
-P3.3 只处理已确认的 CLI 合同差异，不重构 CLI，不提前实现搜索或任务功能。
+- 输出与预期一致，确认当前本地 CLI 能同时显示主程序版本和本地知识库版本。
+- 英文支持及知识库平台优先/common 回退规则：本轮真实 CLI 验收重点；自动化测试已通过，仍需结合具体命令输出完成最终人工验收。
+- `dir`：待继续执行真实 CLI 验收；在收到实际输出并核对前，不标记通过。
+- 因此 P3.3 当前状态为“自动化与静态检查通过，真实 CLI 验收进行中”，尚未正式关闭。
 
-1. `lcmd --version` / `-v`：同时显示主程序版本和本地知识库 manifest 版本；不得联网。
-2. 统一 `--help` 中 Typer 默认英文退出提示及当前明确存在的帮助/错误提示文案，保持中文 CLI 体验。
-3. 为版本输出、帮助输出和相关错误文案补充或调整自动化测试。
-4. 使用本地知识库进行真实 CLI 验收，确认版本显示、帮助提示和未收录提示。
-5. 完成定向测试、全量 pytest、Ruff lint/format、diff 审查后，独立提交并推送代码；再单独更新本总控文档。
+### P3.3 剩余验收与收尾步骤
+
+1. 继续执行 `lcmd dir` 的真实查询，检查是否命中预期的 Windows 专属知识文档，以及输出内容/语言是否符合当前配置。
+2. 根据实际知识库结构，继续核对英文支持和平台专属优先、common 回退行为；只记录真实执行结果，不以测试通过替代 CLI 验收。
+3. 完成剩余真实 CLI 验收后，执行 `git diff --check` 并检查 `git status`、`git diff`，确认没有无关变更。
+4. 将 P3.3 代码作为独立代码提交推送到 `main`；不要把代码提交与本次文档提交混为一笔。
+5. 代码推送成功后，再更新本总控文档，记录代码提交 SHA、最终 CLI 输出和阶段完成状态。
+6. P3.3 完成后进入 P4 内容搜索，不提前实现 P4 功能。
 
 ### 后续阶段进入条件
 
@@ -303,6 +303,7 @@ P3.3 只处理已确认的 CLI 合同差异，不重构 CLI，不提前实现搜
 - P8 更新系统开始前：先冻结更新行为、版本兼容、下载验证、失败回滚规则。
 - P9 打包前：主程序和知识库必须已有可用 Release 版本。
 - 首发范围保持 Windows x64 与 Linux AMD64，不在首发阶段扩展 macOS/ARM64。
+
 ## 13. 协作与状态更新规则
 
 - 一次聚焦一个明确任务；必要时一次只问一个关键问题。
