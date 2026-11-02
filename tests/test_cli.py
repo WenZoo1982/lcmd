@@ -2,12 +2,13 @@
 
 from types import SimpleNamespace
 
+import pytest
 import typer
 from typer.testing import CliRunner
 
 import lcmd.cli.app as cli_app
 from lcmd import __version__
-from lcmd.core.config import ConfigError
+from lcmd.core.config import AppConfig, ConfigError
 from lcmd.knowledge.loader import KnowledgeLoadError
 
 runner = CliRunner()
@@ -402,3 +403,170 @@ def test_cli_help_lists_search_command():
 
     assert result.exit_code == 0
     assert "search" in result.stdout
+
+
+def test_platform_displays_current_platform(monkeypatch):
+    """platform 不带参数时应显示当前知识平台."""
+    config = AppConfig(platform="windows", language="zh-CN")
+    monkeypatch.setattr(cli_app, "load_config", lambda: config)
+
+    result = runner.invoke(cli_app.app, ["platform"])
+
+    assert result.exit_code == 0
+    assert "当前知识平台：windows" in result.stdout
+
+
+def test_platform_switches_platform(monkeypatch):
+    """platform 应切换平台并保存配置."""
+    config = AppConfig(platform="windows", language="zh-CN")
+    saved_configs = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: config)
+    monkeypatch.setattr(
+        cli_app,
+        "save_config",
+        lambda value: saved_configs.append(value),
+    )
+
+    result = runner.invoke(cli_app.app, ["platform", "linux"])
+
+    assert result.exit_code == 0
+    assert "知识平台已切换为：linux" in result.stdout
+    assert saved_configs == [AppConfig(platform="linux", language="zh-CN")]
+
+
+def test_platform_same_value_does_not_save(monkeypatch):
+    """重复设置当前平台时不应重复保存."""
+    config = AppConfig(platform="linux", language="zh-CN")
+    saved_configs = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: config)
+    monkeypatch.setattr(
+        cli_app,
+        "save_config",
+        lambda value: saved_configs.append(value),
+    )
+
+    result = runner.invoke(cli_app.app, ["platform", "linux"])
+
+    assert result.exit_code == 0
+    assert "当前知识平台已经是：linux" in result.stdout
+    assert saved_configs == []
+
+
+@pytest.mark.parametrize("platform", ["macos", "other", "Windows"])
+def test_platform_rejects_unsupported_value(monkeypatch, platform):
+    """platform 应拒绝不支持的平台值."""
+    config = AppConfig(platform="windows", language="zh-CN")
+    saved_configs = []
+    errors = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: config)
+    monkeypatch.setattr(
+        cli_app,
+        "save_config",
+        lambda value: saved_configs.append(value),
+    )
+    monkeypatch.setattr(cli_app, "print_error", errors.append)
+
+    result = runner.invoke(cli_app.app, ["platform", platform])
+
+    assert result.exit_code == 1
+    assert errors
+    assert saved_configs == []
+
+
+def test_language_displays_current_language(monkeypatch):
+    """language 不带参数时应显示当前知识语言."""
+    config = AppConfig(platform="windows", language="zh-CN")
+    monkeypatch.setattr(cli_app, "load_config", lambda: config)
+
+    result = runner.invoke(cli_app.app, ["language"])
+
+    assert result.exit_code == 0
+    assert "当前知识语言：zh-CN" in result.stdout
+
+
+def test_language_switches_language(monkeypatch):
+    """language 应切换语言并保存配置."""
+    config = AppConfig(platform="windows", language="zh-CN")
+    saved_configs = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: config)
+    monkeypatch.setattr(
+        cli_app,
+        "save_config",
+        lambda value: saved_configs.append(value),
+    )
+
+    result = runner.invoke(cli_app.app, ["language", "en-US"])
+
+    assert result.exit_code == 0
+    assert "知识语言已切换为：en-US" in result.stdout
+    assert saved_configs == [AppConfig(platform="windows", language="en-US")]
+
+
+def test_language_same_value_does_not_save(monkeypatch):
+    """重复设置当前语言时不应重复保存."""
+    config = AppConfig(platform="windows", language="en-US")
+    saved_configs = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: config)
+    monkeypatch.setattr(
+        cli_app,
+        "save_config",
+        lambda value: saved_configs.append(value),
+    )
+
+    result = runner.invoke(cli_app.app, ["language", "en-US"])
+
+    assert result.exit_code == 0
+    assert "当前知识语言已经是：en-US" in result.stdout
+    assert saved_configs == []
+
+
+@pytest.mark.parametrize("language", ["en", "zh", "fr-FR"])
+def test_language_rejects_unsupported_value(monkeypatch, language):
+    """language 应拒绝不支持的语言值."""
+    config = AppConfig(platform="windows", language="zh-CN")
+    saved_configs = []
+    errors = []
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: config)
+    monkeypatch.setattr(
+        cli_app,
+        "save_config",
+        lambda value: saved_configs.append(value),
+    )
+    monkeypatch.setattr(cli_app, "print_error", errors.append)
+
+    result = runner.invoke(cli_app.app, ["language", language])
+
+    assert result.exit_code == 1
+    assert errors
+    assert saved_configs == []
+
+
+@pytest.mark.parametrize("command", ["platform", "language"])
+def test_management_commands_work_without_loading_knowledge(
+    monkeypatch,
+    tmp_path,
+    command,
+):
+    """知识库路径失效时，平台和语言管理命令仍应可用."""
+    config = AppConfig(
+        platform="windows",
+        language="zh-CN",
+        path=tmp_path / "missing-knowledge",
+    )
+
+    monkeypatch.setattr(cli_app, "load_config", lambda: config)
+
+    def unexpected_load(config):
+        pytest.fail("管理命令不应加载知识库")
+
+    monkeypatch.setattr(cli_app, "load_knowledge", unexpected_load)
+
+    result = runner.invoke(cli_app.app, [command])
+
+    assert result.exit_code == 0

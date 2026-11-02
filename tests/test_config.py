@@ -23,7 +23,6 @@ def test_get_config_path_uses_platformdirs(monkeypatch, tmp_path):
         ("win32", "windows"),
         ("linux", "linux"),
         ("linux2", "linux"),
-        ("darwin", "macos"),
     ],
 )
 def test_get_default_config(system, expected, monkeypatch):
@@ -39,6 +38,39 @@ def test_get_default_config_rejects_unsupported_platform(monkeypatch):
 
     with pytest.raises(ConfigError, match="暂不支持"):
         config.get_default_config()
+
+
+def test_get_default_config_rejects_macos(monkeypatch):
+    """macOS 暂不属于首发支持平台."""
+    monkeypatch.setattr(config.sys, "platform", "darwin")
+
+    with pytest.raises(ConfigError, match="暂不支持"):
+        config.get_default_config()
+
+
+def test_load_config_rejects_macos(tmp_path):
+    """配置文件不得指定暂不支持的 macOS 平台."""
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '[knowledge]\nplatform = "macos"\nlanguage = "zh-CN"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match="不支持的平台"):
+        config.load_config(path)
+
+
+def test_save_config_rejects_macos(tmp_path):
+    """不得保存 macOS 平台配置."""
+    path = tmp_path / "config.toml"
+
+    with pytest.raises(ConfigError, match="不支持的平台"):
+        config.save_config(
+            AppConfig(platform="macos", language="zh-CN"),
+            path,
+        )
+
+    assert not path.exists()
 
 
 def test_load_config_creates_default_file(tmp_path, monkeypatch):
@@ -123,7 +155,7 @@ def test_load_config_rejects_non_string_knowledge_path(tmp_path):
 def test_save_config_and_load_again(tmp_path):
     """保存后的配置应能重新读取."""
     path = tmp_path / "nested" / "config.toml"
-    expected = AppConfig(platform="macos", language="zh-CN")
+    expected = AppConfig(platform="windows", language="zh-CN")
 
     saved_path = config.save_config(expected, path)
 

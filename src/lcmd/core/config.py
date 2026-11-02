@@ -10,7 +10,7 @@ from pathlib import Path
 
 from platformdirs import user_config_path
 
-SUPPORTED_PLATFORMS = {"windows", "linux", "macos"}
+SUPPORTED_PLATFORMS = {"windows", "linux"}
 SUPPORTED_LANGUAGES = {"zh-CN", "en-US"}
 
 
@@ -38,8 +38,6 @@ def get_default_config() -> AppConfig:
         platform = "windows"
     elif sys.platform.startswith("linux"):
         platform = "linux"
-    elif sys.platform == "darwin":
-        platform = "macos"
     else:
         raise ConfigError(f"暂不支持当前操作系统：{sys.platform}")
 

@@ -1,12 +1,20 @@
 """LCMD CLI 应用."""
 
+from dataclasses import replace
 from typing import Any
 
 import typer
 from typer.core import TyperGroup
 
 from lcmd import __version__
-from lcmd.core.config import ConfigError, load_config
+from lcmd.core.config import (
+    SUPPORTED_LANGUAGES,
+    SUPPORTED_PLATFORMS,
+    AppConfig,
+    ConfigError,
+    load_config,
+    save_config,
+)
 from lcmd.knowledge.loader import (
     KnowledgeLoadError,
     load_knowledge,
@@ -88,8 +96,18 @@ def main(
 
     try:
         config = load_config()
+    except ConfigError as exc:
+        print_error(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    # 平台和语言管理只依赖配置，不需要加载知识库。
+    if ctx.invoked_subcommand in {"platform", "language"}:
+        ctx.obj = config
+        return
+
+    try:
         knowledge = load_knowledge(config)
-    except (ConfigError, KnowledgeLoadError) as exc:
+    except KnowledgeLoadError as exc:
         print_error(str(exc))
         raise typer.Exit(code=1) from exc
 
@@ -97,6 +115,76 @@ def main(
 
     for diagnostic in knowledge.diagnostics:
         print_warning(f"{diagnostic.path}：{diagnostic.message}")
+
+
+@app.command()
+def platform(
+    ctx: typer.Context,
+    name: str | None = typer.Argument(
+        None,
+        help="要切换到的平台：windows 或 linux。",
+    ),
+) -> None:
+    """查看或切换知识平台."""
+    config: AppConfig = ctx.obj
+
+    if name is None:
+        typer.echo(f"当前知识平台：{config.platform}")
+        return
+
+    if name not in SUPPORTED_PLATFORMS:
+        allowed = "、".join(sorted(SUPPORTED_PLATFORMS))
+        print_error(f"不支持的平台：{name}。允许的值：{allowed}。")
+        raise typer.Exit(code=1)
+
+    if name == config.platform:
+        typer.echo(f"当前知识平台已经是：{name}")
+        return
+
+    updated_config = replace(config, platform=name)
+
+    try:
+        save_config(updated_config)
+    except ConfigError as exc:
+        print_error(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"知识平台已切换为：{name}")
+
+
+@app.command()
+def language(
+    ctx: typer.Context,
+    name: str | None = typer.Argument(
+        None,
+        help="要切换到的语言：zh-CN 或 en-US。",
+    ),
+) -> None:
+    """查看或切换知识语言."""
+    config: AppConfig = ctx.obj
+
+    if name is None:
+        typer.echo(f"当前知识语言：{config.language}")
+        return
+
+    if name not in SUPPORTED_LANGUAGES:
+        allowed = "、".join(sorted(SUPPORTED_LANGUAGES))
+        print_error(f"不支持的语言：{name}。允许的值：{allowed}。")
+        raise typer.Exit(code=1)
+
+    if name == config.language:
+        typer.echo(f"当前知识语言已经是：{name}")
+        return
+
+    updated_config = replace(config, language=name)
+
+    try:
+        save_config(updated_config)
+    except ConfigError as exc:
+        print_error(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"知识语言已切换为：{name}")
 
 
 @app.command()
