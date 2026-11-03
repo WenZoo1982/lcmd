@@ -1,6 +1,6 @@
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -29,6 +29,87 @@ class AppState:
 
 class DynamicTyperGroup(TyperGroup):
     """将未注册的命令名及其参数交给动态知识库查询。"""
+
+    _OPTIONAL_VALUE_OPTIONS = {
+        "--platform": "--platform=",
+        "-p": "--platform=",
+        "--language": "--language=",
+        "-l": "--language=",
+    }
+
+    _ROOT_VALUE_OPTIONS = {
+        "--path",
+    }
+
+    _ROOT_FLAG_OPTIONS = {
+        "--config",
+        "-c",
+        "--update",
+        "-u",
+        "--version",
+        "-v",
+        "--help",
+        "-h",
+    }
+
+    def parse_args(self, ctx: typer.Context, args: list[str]) -> list[str]:
+        """允许平台、语言选项省略值；不处理子命令和动态查询参数。"""
+        normalized: list[str] = []
+        index = 0
+
+        while index < len(args):
+            token = args[index]
+
+            if token in self._OPTIONAL_VALUE_OPTIONS:
+                if index + 1 >= len(args) or args[index + 1].startswith("-"):
+                    normalized.append(self._OPTIONAL_VALUE_OPTIONS[token])
+                    index += 1
+                    continue
+
+                normalized.append(token)
+                normalized.append(args[index + 1])
+                index += 2
+                continue
+
+            if token.startswith("--platform=") or token.startswith("--language="):
+                normalized.append(token)
+                index += 1
+                continue
+
+            if token.startswith("-p") and token != "-p":
+                normalized.append(f"--platform={token[2:]}")
+                index += 1
+                continue
+
+            if token.startswith("-l") and token != "-l":
+                normalized.append(f"--language={token[2:]}")
+                index += 1
+                continue
+
+            if token in self._ROOT_VALUE_OPTIONS:
+                normalized.append(token)
+                if index + 1 < len(args):
+                    normalized.append(args[index + 1])
+                    index += 2
+                else:
+                    index += 1
+                continue
+
+            if token in self._ROOT_FLAG_OPTIONS:
+                normalized.append(token)
+                index += 1
+                continue
+
+            if token.startswith("-"):
+                normalized.append(token)
+                index += 1
+                continue
+
+            # 第一个非选项参数是固定子命令或动态查询的起点。
+            normalized.extend(args[index:])
+            break
+
+        return super().parse_args(ctx, normalized)
 
     def resolve_command(
         self,
@@ -74,46 +155,54 @@ def initialize_state(
         catalog = discover_catalog(knowledge_path)
         knowledge = load_knowledge(catalog, config.platform, config.language)
     except (KnowledgeLoadError, OSError):
-        return AppState(
-            config=config,
-            catalog=None,
-            knowledge=None,
-        )
+        return AppState(config=config, catalog=None, knowledge=None)
 
     if not config_file.is_file():
         save_config(config, config_file)
 
-    return AppState(
-        config=config,
-        catalog=catalog,
-        knowledge=knowledge,
-    )
+    return AppState(config=config, catalog=catalog, knowledge=knowledge)
 
 
 def switch_platform(state: AppState, platform: str, config_file: Path) -> AppState:
     """验证并切换平台，成功加载后才保存配置。"""
-    if state.catalog is None:
-        raise KnowledgeLoadError("知识库不可用。")
-
-    new_config = replace(state.config, platform=platform.lower())
-    knowledge = load_knowledge(state.catalog, new_config.platform, new_config.language)
-
-    save_config(new_config, config_file)
-
-    return AppState(
-        config=new_config,
-        catalog=state.catalog,
-        knowledge=knowledge,
+    return switch_configuration(
+        state,
+        config_file,
+        platform=platform,
     )
 
 
 def switch_language(state: AppState, language: str, config_file: Path) -> AppState:
     """验证并切换语言，成功加载后才保存配置。"""
+    return switch_configuration(
+        state,
+        config_file,
+        language=language,
+    )
+
+
+def switch_configuration(
+    state: AppState,
+    config_file: Path,
+    *,
+    platform: str | None = None,
+    language: str | None = None,
+) -> AppState:
+    """验证最终平台和语言组合，并且只保存一次配置。"""
     if state.catalog is None:
         raise KnowledgeLoadError("知识库不可用。")
 
-    new_config = replace(state.config, language=language)
-    knowledge = load_knowledge(state.catalog, new_config.platform, new_config.language)
+    new_config = replace(
+        state.config,
+        platform=(platform.lower() if platform is not None else state.config.platform),
+        language=(language if language is not None else state.config.language),
+    )
+
+    knowledge = load_knowledge(
+        state.catalog,
+        new_config.platform,
+        new_config.language,
+    )
 
     save_config(new_config, config_file)
 
@@ -122,6 +211,12 @@ def switch_language(state: AppState, language: str, config_file: Path) -> AppSta
         catalog=state.catalog,
         knowledge=knowledge,
     )
+
+
+def _show_configuration(state: AppState, console: Console) -> None:
+    console.print(f"知识库路径：{state.config.knowledge_path}")
+    console.print(f"当前平台：{state.config.platform}")
+    console.print(f"当前语言：{state.config.language}")
 
 
 def _show_platforms(state: AppState, console: Console) -> None:
@@ -192,12 +287,68 @@ def create_app() -> typer.Typer:
             "-v",
             help="显示程序和知识库版本。",
         ),
+        config: bool = typer.Option(
+            False,
+            "--config",
+            "-c",
+            help="查看或修改配置。",
+        ),
+        path: str | None = typer.Option(
+            None,
+            "--path",
+            help="设置知识库路径（需要配合 --config）。",
+        ),
+        platform: str | None = typer.Option(
+            None,
+            "--platform",
+            "-p",
+            help="查看或设置目标平台。",
+        ),
+        language: str | None = typer.Option(
+            None,
+            "--language",
+            "-l",
+            help="查看或设置目标语言。",
+        ),
+        update: bool = typer.Option(
+            False,
+            "--update",
+            "-u",
+            help="更新知识库（暂未实现）。",
+        ),
     ) -> None:
         console = Console()
 
+        config_options_used = (
+            config or path is not None or platform is not None or language is not None
+        )
+
         if version:
+            if config_options_used or update:
+                console.print("--version 不能与配置或更新参数同时使用。", style="red")
+                raise typer.Exit(code=2)
+
             _show_version(console)
             raise typer.Exit()
+
+        if update:
+            if config_options_used:
+                console.print("--update 不能与配置参数同时使用。", style="red")
+                raise typer.Exit(code=2)
+
+            console.print("知识库更新功能尚未实现。", style="yellow")
+            raise typer.Exit()
+
+        if (path is not None or platform is not None or language is not None) and not config:
+            console.print(
+                "--path、--platform 和 --language 必须配合 --config/-c 使用。",
+                style="red",
+            )
+            raise typer.Exit(code=2)
+
+        if path is not None and (platform is not None or language is not None):
+            console.print("--path 不能与 --platform 或 --language 同时使用。", style="red")
+            raise typer.Exit(code=2)
 
         try:
             state = initialize_state()
@@ -206,6 +357,54 @@ def create_app() -> typer.Typer:
             raise typer.Exit(code=1) from None
 
         ctx.obj = state
+
+        if config:
+            if path is not None:
+                console.print("知识库路径迁移功能尚未接入。", style="yellow")
+                raise typer.Exit()
+
+            if platform is None and language is None:
+                _show_configuration(state, console)
+                raise typer.Exit()
+
+            if platform == "" or platform is None:
+                if platform is not None:
+                    _show_platforms(state, console)
+
+            if language == "":
+                _show_languages(state, console)
+
+            if platform == "" and language not in (None, ""):
+                console.print("不能在查看平台的同时切换语言。", style="red")
+                raise typer.Exit(code=2)
+
+            if language == "" and platform not in (None, ""):
+                console.print("不能在查看语言的同时切换平台。", style="red")
+                raise typer.Exit(code=2)
+
+            if platform == "" or language == "":
+                raise typer.Exit()
+
+            if platform is None and language is None:
+                raise typer.Exit()
+
+            try:
+                new_state = switch_configuration(
+                    state,
+                    get_config_file(),
+                    platform=platform,
+                    language=language,
+                )
+            except (KnowledgeLoadError, ConfigError):
+                console.print("配置修改失败，当前配置保持不变。", style="red")
+                raise typer.Exit(code=1) from None
+
+            if platform is not None:
+                console.print(f"已切换平台：{new_state.config.platform}")
+            if language is not None:
+                console.print(f"已切换语言：{new_state.config.language}")
+
+            raise typer.Exit()
 
         dynamic_arguments = ctx.meta.get("lcmd_dynamic_arguments")
         if dynamic_arguments is not None:
@@ -224,7 +423,10 @@ def create_app() -> typer.Typer:
     @app.command("search")
     def search_command(
         ctx: typer.Context,
-        keyword: list[str] = typer.Argument(..., help="一个或多个搜索关键词。"),  # noqa: B008  # noqa: B008
+        keyword: Annotated[
+            list[str],
+            typer.Argument(help="一个或多个搜索关键词。"),
+        ],
         full: bool = typer.Option(
             False,
             "--full",
@@ -244,47 +446,5 @@ def create_app() -> typer.Typer:
             full=full,
         )
         render_search_results(results)
-
-    @app.command("platform")
-    def platform_command(
-        ctx: typer.Context,
-        platform: str | None = typer.Argument(None),
-    ) -> None:
-        state: AppState = ctx.find_root().obj
-        console = Console()
-        config_file = get_config_file()
-
-        if platform is None:
-            _show_platforms(state, console)
-            return
-
-        try:
-            new_state = switch_platform(state, platform, config_file)
-        except (KnowledgeLoadError, ConfigError):
-            console.print("平台切换失败，当前配置保持不变。", style="red")
-            raise typer.Exit(code=1) from None
-
-        console.print(f"已切换平台：{new_state.config.platform}")
-
-    @app.command("language")
-    def language_command(
-        ctx: typer.Context,
-        language: str | None = typer.Argument(None),
-    ) -> None:
-        state: AppState = ctx.find_root().obj
-        console = Console()
-        config_file = get_config_file()
-
-        if language is None:
-            _show_languages(state, console)
-            return
-
-        try:
-            new_state = switch_language(state, language, config_file)
-        except (KnowledgeLoadError, ConfigError):
-            console.print("语言切换失败，当前配置保持不变。", style="red")
-            raise typer.Exit(code=1) from None
-
-        console.print(f"已切换语言：{new_state.config.language}")
 
     return app

@@ -13,24 +13,18 @@ runner = CliRunner()
 
 
 @pytest.fixture
-def cli_mocks(monkeypatch):
+def cli_mocks(monkeypatch, tmp_path):
     """为 CLI 测试提供隔离的初始化状态和模块调用。"""
     catalog = Mock()
     catalog.platforms = (
-        SimpleNamespace(
-            name="windows",
-            languages=("en-US", "zh-CN"),
-        ),
-        SimpleNamespace(
-            name="linux",
-            languages=("en-US", "zh-CN"),
-        ),
+        SimpleNamespace(name="windows", languages=("en-US", "zh-CN")),
+        SimpleNamespace(name="linux", languages=("en-US", "zh-CN")),
     )
     catalog.version = "0.1.0"
 
     state = cli_app.AppState(
         config=AppConfig(
-            knowledge_path=None,
+            knowledge_path=tmp_path / "knowledge",
             platform="windows",
             language="zh-CN",
         ),
@@ -43,12 +37,17 @@ def cli_mocks(monkeypatch):
     render_query = Mock()
     search = Mock(return_value=(Mock(name="search_result"),))
     render_search = Mock()
+    save = Mock()
+    load = Mock(return_value=Mock(name="loaded_knowledge"))
 
     monkeypatch.setattr(cli_app, "initialize_state", initialize)
     monkeypatch.setattr(cli_app, "query_document", query)
     monkeypatch.setattr(cli_app, "render_query_result", render_query)
     monkeypatch.setattr(cli_app, "search_knowledge", search)
     monkeypatch.setattr(cli_app, "render_search_results", render_search)
+    monkeypatch.setattr(cli_app, "get_config_file", Mock(return_value=tmp_path / "config.toml"))
+    monkeypatch.setattr(cli_app, "save_config", save)
+    monkeypatch.setattr(cli_app, "load_knowledge", load)
 
     return {
         "state": state,
@@ -57,16 +56,20 @@ def cli_mocks(monkeypatch):
         "render_query": render_query,
         "search": search,
         "render_search": render_search,
+        "save": save,
+        "load": load,
     }
 
 
-def test_help_is_available():
-    result = runner.invoke(create_app(), ["--help"])
+def test_help_only_lists_search_as_fixed_command():
+    app = create_app()
+    result = runner.invoke(app, ["--help"])
 
     assert result.exit_code == 0
     assert "search" in result.output
-    assert "platform" in result.output
-    assert "language" in result.output
+
+    command_names = {command.name for command in app.registered_commands}
+    assert command_names == {"search"}
 
 
 def test_version_is_available(cli_mocks, monkeypatch):
@@ -74,7 +77,9 @@ def test_version_is_available(cli_mocks, monkeypatch):
     catalog.version = "0.1.0"
 
     monkeypatch.setattr(
-        cli_app, "get_config_file", Mock(return_value=Mock(is_file=Mock(return_value=False)))
+        cli_app,
+        "get_config_file",
+        Mock(return_value=Mock(is_file=Mock(return_value=False))),
     )
     monkeypatch.setattr(cli_app, "get_default_knowledge_path", Mock(return_value=Mock()))
     monkeypatch.setattr(cli_app, "discover_catalog", Mock(return_value=catalog))
@@ -93,11 +98,7 @@ def test_version_shows_unavailable_knowledge_base(monkeypatch):
         "get_config_file",
         Mock(return_value=Mock(is_file=Mock(return_value=False))),
     )
-    monkeypatch.setattr(
-        cli_app,
-        "get_default_knowledge_path",
-        Mock(return_value=Mock()),
-    )
+    monkeypatch.setattr(cli_app, "get_default_knowledge_path", Mock(return_value=Mock()))
     monkeypatch.setattr(
         cli_app,
         "discover_catalog",
@@ -109,6 +110,24 @@ def test_version_shows_unavailable_knowledge_base(monkeypatch):
     assert result.exit_code == 0
     assert "LCMD：" in result.output
     assert "知识库：不可用" in result.output
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--version", "--config"],
+        ["--version", "--path", "D:/KB"],
+        ["--version", "--platform", "linux"],
+        ["--version", "--language", "en-US"],
+        ["--version", "--update"],
+    ],
+)
+def test_version_rejects_other_root_options(arguments, cli_mocks):
+    result = runner.invoke(create_app(), arguments)
+
+    assert result.exit_code == 2
+    assert "不能与配置或更新参数同时使用" in result.output
+    cli_mocks["initialize"].assert_not_called()
 
 
 def test_dynamic_single_argument_is_queried(cli_mocks):
@@ -142,13 +161,23 @@ def test_dynamic_nested_arguments_are_queried(cli_mocks):
     )
 
 
+@pytest.mark.parametrize("command", ["platform", "language"])
+def test_platform_and_language_are_dynamic_queries(cli_mocks, command):
+    result = runner.invoke(create_app(), [command])
+
+    assert result.exit_code == 0
+    cli_mocks["query"].assert_called_once_with(
+        cli_mocks["state"].knowledge,
+        [command],
+    )
+
+
 def test_dynamic_query_fails_when_knowledge_unavailable(cli_mocks):
-    unavailable_state = cli_app.AppState(
+    cli_mocks["initialize"].return_value = cli_app.AppState(
         config=cli_mocks["state"].config,
         catalog=None,
         knowledge=None,
     )
-    cli_mocks["initialize"].return_value = unavailable_state
 
     result = runner.invoke(create_app(), ["ls"])
 
@@ -214,105 +243,161 @@ def test_search_fails_when_knowledge_unavailable(cli_mocks):
     cli_mocks["search"].assert_not_called()
 
 
-def test_platform_command_is_recognized(cli_mocks):
-    result = runner.invoke(create_app(), ["platform"])
+def test_config_shows_current_configuration(cli_mocks):
+    result = runner.invoke(create_app(), ["-c"])
+
+    assert result.exit_code == 0
+    assert "知识库路径：" in result.output
+    assert "当前平台：windows" in result.output
+    assert "当前语言：zh-CN" in result.output
+    cli_mocks["save"].assert_not_called()
+
+
+@pytest.mark.parametrize("option", ["--platform", "-p"])
+def test_platform_without_value_shows_available_platforms(cli_mocks, option):
+    result = runner.invoke(create_app(), ["-c", option])
 
     assert result.exit_code == 0
     assert "当前平台：windows" in result.output
     assert "windows" in result.output
-    cli_mocks["query"].assert_not_called()
+    assert "linux" in result.output
+    cli_mocks["save"].assert_not_called()
 
 
-def test_language_command_is_recognized(cli_mocks):
-    result = runner.invoke(create_app(), ["language"])
+@pytest.mark.parametrize("option", ["--language", "-l"])
+def test_language_without_value_shows_available_languages(cli_mocks, option):
+    result = runner.invoke(create_app(), ["-c", option])
 
     assert result.exit_code == 0
     assert "当前语言：zh-CN" in result.output
+    assert "en-US" in result.output
     assert "zh-CN" in result.output
-    cli_mocks["query"].assert_not_called()
+    cli_mocks["save"].assert_not_called()
 
 
-def test_platform_is_displayed_when_knowledge_unavailable(cli_mocks):
-    cli_mocks["initialize"].return_value = cli_app.AppState(
-        config=cli_mocks["state"].config,
-        catalog=None,
-        knowledge=None,
-    )
-
-    result = runner.invoke(create_app(), ["platform"])
-
-    assert result.exit_code == 0
-    assert "当前平台：windows" in result.output
-    assert "知识库不可用" in result.output
-
-
-def test_language_is_displayed_when_knowledge_unavailable(cli_mocks):
-    cli_mocks["initialize"].return_value = cli_app.AppState(
-        config=cli_mocks["state"].config,
-        catalog=None,
-        knowledge=None,
-    )
-
-    result = runner.invoke(create_app(), ["language"])
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["-c", "--platform", "linux"],
+        ["-c", "-p", "linux"],
+    ],
+)
+def test_platform_value_switches_platform(cli_mocks, arguments):
+    result = runner.invoke(create_app(), arguments)
 
     assert result.exit_code == 0
-    assert "当前语言：zh-CN" in result.output
-    assert "知识库不可用" in result.output
+    assert "已切换平台：linux" in result.output
+    cli_mocks["load"].assert_called_once_with(
+        cli_mocks["state"].catalog,
+        "linux",
+        "zh-CN",
+    )
+    cli_mocks["save"].assert_called_once()
 
 
-def test_platform_rejects_extra_arguments(cli_mocks):
-    result = runner.invoke(create_app(), ["platform", "linux", "windows"])
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["-c", "--language", "en-US"],
+        ["-c", "-l", "en-US"],
+    ],
+)
+def test_language_value_switches_language(cli_mocks, arguments):
+    result = runner.invoke(create_app(), arguments)
 
-    assert result.exit_code != 0
-    assert "Got unexpected extra argument" in result.output
-    cli_mocks["query"].assert_not_called()
+    assert result.exit_code == 0
+    assert "已切换语言：en-US" in result.output
+    cli_mocks["load"].assert_called_once_with(
+        cli_mocks["state"].catalog,
+        "windows",
+        "en-US",
+    )
+    cli_mocks["save"].assert_called_once()
 
 
-def test_language_rejects_extra_arguments(cli_mocks):
-    result = runner.invoke(create_app(), ["language", "en-US", "zh-CN"])
+def test_platform_and_language_can_be_switched_together(cli_mocks):
+    result = runner.invoke(
+        create_app(),
+        ["-c", "-p", "linux", "-l", "en-US"],
+    )
 
-    assert result.exit_code != 0
-    assert "Got unexpected extra argument" in result.output
-    cli_mocks["query"].assert_not_called()
+    assert result.exit_code == 0
+    assert "已切换平台：linux" in result.output
+    assert "已切换语言：en-US" in result.output
+    cli_mocks["load"].assert_called_once_with(
+        cli_mocks["state"].catalog,
+        "linux",
+        "en-US",
+    )
+    cli_mocks["save"].assert_called_once()
 
 
-def test_platform_switch_fails_when_knowledge_unavailable(cli_mocks, monkeypatch):
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--path", "D:/KB"],
+        ["--platform", "linux"],
+        ["--language", "en-US"],
+    ],
+)
+def test_configuration_options_require_config_entry(arguments, cli_mocks):
+    result = runner.invoke(create_app(), arguments)
+
+    assert result.exit_code == 2
+    assert "必须配合 --config/-c" in result.output
+    cli_mocks["initialize"].assert_not_called()
+
+
+def test_path_is_recognized_but_migration_is_not_yet_connected(cli_mocks):
+    result = runner.invoke(create_app(), ["-c", "--path", "D:/KB"])
+
+    assert result.exit_code == 0
+    assert "知识库路径迁移功能尚未接入" in result.output
+
+
+def test_path_cannot_be_combined_with_platform_or_language(cli_mocks):
+    result = runner.invoke(
+        create_app(),
+        ["-c", "--path", "D:/KB", "-p", "linux"],
+    )
+
+    assert result.exit_code == 2
+    assert "--path 不能与 --platform 或 --language 同时使用" in result.output
+
+
+def test_update_option_reports_not_implemented(cli_mocks):
+    result = runner.invoke(create_app(), ["-u"])
+
+    assert result.exit_code == 0
+    assert "知识库更新功能尚未实现" in result.output
+    cli_mocks["initialize"].assert_not_called()
+
+
+def test_update_cannot_be_combined_with_configuration(cli_mocks):
+    result = runner.invoke(create_app(), ["-u", "-c"])
+
+    assert result.exit_code == 2
+    assert "--update 不能与配置参数同时使用" in result.output
+
+
+def test_platform_switch_fails_when_knowledge_unavailable(cli_mocks):
     cli_mocks["initialize"].return_value = cli_app.AppState(
         config=cli_mocks["state"].config,
         catalog=None,
         knowledge=None,
     )
-    save = Mock()
-    monkeypatch.setattr(cli_app, "save_config", save)
 
-    result = runner.invoke(create_app(), ["platform", "linux"])
+    result = runner.invoke(create_app(), ["-c", "-p", "linux"])
 
     assert result.exit_code == 1
-    assert "平台切换失败" in result.output
-    save.assert_not_called()
-
-
-def test_language_switch_fails_when_knowledge_unavailable(cli_mocks, monkeypatch):
-    cli_mocks["initialize"].return_value = cli_app.AppState(
-        config=cli_mocks["state"].config,
-        catalog=None,
-        knowledge=None,
-    )
-    save = Mock()
-    monkeypatch.setattr(cli_app, "save_config", save)
-
-    result = runner.invoke(create_app(), ["language", "en-US"])
-
-    assert result.exit_code == 1
-    assert "语言切换失败" in result.output
-    save.assert_not_called()
+    assert "配置修改失败" in result.output
+    cli_mocks["save"].assert_not_called()
 
 
 def test_initialize_state_saves_first_valid_config(tmp_path, monkeypatch):
     config_file = tmp_path / "config.toml"
     knowledge_path = tmp_path / "knowledge"
     catalog = Mock()
-    catalog.version = "0.1.0"
     knowledge = Mock()
 
     discover = Mock(return_value=catalog)
@@ -391,7 +476,6 @@ def test_initialize_state_returns_config_when_knowledge_unavailable(
 def test_initialize_state_does_not_save_when_loading_fails(tmp_path, monkeypatch):
     config_file = tmp_path / "config.toml"
     knowledge_path = tmp_path / "missing-kb"
-
     save_config = Mock()
 
     monkeypatch.setattr(
@@ -510,5 +594,71 @@ def test_switch_language_does_not_save_when_loading_fails(tmp_path, monkeypatch)
     with pytest.raises(KnowledgeLoadError):
         cli_app.switch_language(state, "en-US", tmp_path / "config.toml")
 
+    assert state.config.language == "zh-CN"
+    save.assert_not_called()
+
+
+def test_switch_configuration_saves_once_for_combined_change(tmp_path, monkeypatch):
+    state = cli_app.AppState(
+        config=AppConfig(
+            knowledge_path=tmp_path / "kb",
+            platform="windows",
+            language="zh-CN",
+        ),
+        catalog=Mock(),
+        knowledge=Mock(),
+    )
+    knowledge = Mock()
+    load = Mock(return_value=knowledge)
+    save = Mock()
+
+    monkeypatch.setattr(cli_app, "load_knowledge", load)
+    monkeypatch.setattr(cli_app, "save_config", save)
+
+    result = cli_app.switch_configuration(
+        state,
+        tmp_path / "config.toml",
+        platform="linux",
+        language="en-US",
+    )
+
+    assert result.config.platform == "linux"
+    assert result.config.language == "en-US"
+    assert result.knowledge is knowledge
+    load.assert_called_once_with(state.catalog, "linux", "en-US")
+    save.assert_called_once_with(result.config, tmp_path / "config.toml")
+
+
+def test_switch_configuration_does_not_save_when_final_combination_is_invalid(
+    tmp_path,
+    monkeypatch,
+):
+    state = cli_app.AppState(
+        config=AppConfig(
+            knowledge_path=tmp_path / "kb",
+            platform="windows",
+            language="zh-CN",
+        ),
+        catalog=Mock(),
+        knowledge=Mock(),
+    )
+    save = Mock()
+
+    monkeypatch.setattr(
+        cli_app,
+        "load_knowledge",
+        Mock(side_effect=KnowledgeLoadError("组合不可用")),
+    )
+    monkeypatch.setattr(cli_app, "save_config", save)
+
+    with pytest.raises(KnowledgeLoadError):
+        cli_app.switch_configuration(
+            state,
+            tmp_path / "config.toml",
+            platform="linux",
+            language="en-US",
+        )
+
+    assert state.config.platform == "windows"
     assert state.config.language == "zh-CN"
     save.assert_not_called()
