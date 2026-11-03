@@ -1,4 +1,4 @@
-"""支持通过 python -m lcmd 启动."""
+"""支持通过 python -m lcmd 启动。"""
 
 from lcmd.main import main
 

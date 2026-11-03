@@ -1,111 +1,155 @@
-"""LCMD 知识文档 Schema 校验器测试."""
-
 import pytest
 
 from lcmd.knowledge.parser import ParsedDocument
-from lcmd.knowledge.validator import DocumentValidationError, validate_document
+from lcmd.knowledge.validator import (
+    DocumentValidationError,
+    validate_document,
+)
 
 
-def make_document(metadata, body="# 示例\n\n文档正文。\n"):
-    """创建用于测试的解析后文档."""
-    return ParsedDocument(metadata=metadata, body=body)
+def make_document(
+    metadata=None,
+    body="---\n\n## 用途\n\n测试正文。\n",
+):
+    if metadata is None:
+        metadata = {"summary": "测试文档。"}
+
+    return ParsedDocument(
+        metadata=metadata,
+        body=body,
+    )
 
 
-def test_validate_command_document():
-    """应接受符合 Schema 的命令文档."""
-    document = make_document({"summary": "复制文件和目录。"})
+def test_validate_document_accepts_valid_document():
+    validate_document(make_document())
 
-    result = validate_document(document, document_type="command")
 
-    assert result == {"summary": "复制文件和目录。"}
+def test_validate_document_accepts_crlf_body():
+    document = make_document(body="---\r\n\r\n## 用途\r\n\r\n测试正文。\r\n")
+
+    validate_document(document)
+
+
+def test_validate_document_accepts_leading_blank_line():
+    document = make_document(body="\n---\n\n## 用途\n\n测试正文。\n")
+
+    validate_document(document)
+
+
+def test_validate_document_accepts_leading_whitespace_lines():
+    document = make_document(body="\n   \n\t\n---\n\n## 用途\n\n测试正文。\n")
+
+    validate_document(document)
+
+
+def test_validate_document_accepts_leading_blank_line_with_crlf():
+    document = make_document(body="\r\n---\r\n\r\n## 用途\r\n\r\n测试正文。\r\n")
+
+    validate_document(document)
 
 
 def test_validate_document_rejects_missing_summary():
-    """缺少必填 summary 时应报错."""
-    document = make_document({})
-
-    with pytest.raises(DocumentValidationError, match="summary"):
-        validate_document(document, document_type="command")
-
-
-@pytest.mark.parametrize(
-    "summary",
-    [
-        None,
-        123,
-        ["复制文件"],
-    ],
-)
-def test_validate_document_rejects_non_string_summary(summary):
-    """summary 不是字符串时应报错."""
-    document = make_document({"summary": summary})
-
-    with pytest.raises(DocumentValidationError, match="summary"):
-        validate_document(document, document_type="command")
-
-
-@pytest.mark.parametrize(
-    "summary",
-    [
-        "",
-        "   ",
-        "\t\n",
-    ],
-)
-def test_validate_document_rejects_empty_summary(summary):
-    """summary 为空或只有空白字符时应报错."""
-    document = make_document({"summary": summary})
-
-    with pytest.raises(DocumentValidationError, match="summary"):
-        validate_document(document, document_type="command")
-
-
-@pytest.mark.parametrize(
-    "metadata",
-    [
-        {
-            "summary": "复制文件和目录。",
-            "keywords": ["复制"],
-        },
-        {
-            "summary": "查找大文件。",
-            "commands": ["find", "du"],
-        },
-    ],
-)
-def test_validate_command_document_rejects_unknown_fields(metadata):
-    """命令文档不允许出现未定义字段，包括旧任务文档字段."""
-    document = make_document(metadata)
+    document = make_document(metadata={})
 
     with pytest.raises(DocumentValidationError):
-        validate_document(document, document_type="command")
+        validate_document(document)
 
 
-def test_validate_command_document_rejects_empty_body():
-    """命令文档正文为空时应报错."""
+def test_validate_document_rejects_unknown_metadata_field():
     document = make_document(
-        {"summary": "复制文件和目录。"},
-        body="",
+        metadata={
+            "summary": "测试文档。",
+            "title": "不允许的字段",
+        }
     )
 
-    with pytest.raises(DocumentValidationError, match="正文"):
-        validate_document(document, document_type="command")
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
 
 
-def test_validate_command_document_rejects_whitespace_body():
-    """命令文档正文只有空白字符时应报错."""
-    document = make_document(
-        {"summary": "查找大文件。"},
-        body=" \n\t\n",
-    )
+def test_validate_document_rejects_empty_summary():
+    document = make_document(metadata={"summary": ""})
 
-    with pytest.raises(DocumentValidationError, match="正文"):
-        validate_document(document, document_type="command")
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
 
 
-def test_validate_document_rejects_unsupported_document_type():
-    """不支持的文档类型应明确报错."""
-    document = make_document({"summary": "测试。"})
+def test_validate_document_rejects_whitespace_summary():
+    document = make_document(metadata={"summary": "   "})
 
-    with pytest.raises(ValueError, match="不支持"):
-        validate_document(document, document_type="other")
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
+
+
+def test_validate_document_rejects_non_string_summary():
+    document = make_document(metadata={"summary": 123})
+
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
+
+
+def test_validate_document_rejects_array_summary():
+    document = make_document(metadata={"summary": ["测试"]})
+
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
+
+
+def test_validate_document_rejects_missing_body_separator():
+    document = make_document(body="## 用途\n\n测试正文。\n")
+
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
+
+
+def test_validate_document_rejects_non_standalone_separator():
+    document = make_document(body="--- 正文\n")
+
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
+
+
+def test_validate_document_rejects_separator_with_trailing_spaces():
+    document = make_document(body="---   \n\n测试正文。\n")
+
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
+
+
+def test_validate_document_rejects_empty_body():
+    document = make_document(body="")
+
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
+
+
+def test_validate_document_rejects_separator_only():
+    document = make_document(body="---\n")
+
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
+
+
+def test_validate_document_rejects_whitespace_only_body():
+    document = make_document(body="---\n   \n\t\n")
+
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
+
+
+def test_validate_document_rejects_non_dict_metadata():
+    document = make_document(metadata=["summary"])
+
+    with pytest.raises(DocumentValidationError):
+        validate_document(document)
+
+
+def test_validate_document_does_not_modify_document():
+    document = make_document()
+    original_metadata = document.metadata
+    original_body = document.body
+
+    validate_document(document)
+
+    assert document.metadata is original_metadata
+    assert document.body == original_body

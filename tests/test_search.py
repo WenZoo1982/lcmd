@@ -1,118 +1,226 @@
-"""LCMD 命令关键词搜索测试."""
-
-from pathlib import Path
-
-from lcmd.knowledge.loader import LoadedDocument
-from lcmd.knowledge.search import search_commands
+from lcmd.knowledge.models import KnowledgeBase, KnowledgeDocument
+from lcmd.knowledge.search import search_knowledge
 
 
-def make_command(
-    name: str,
-    summary: str,
-    body: str = "",
-) -> LoadedDocument:
-    """创建测试命令文档."""
-    return LoadedDocument(
-        name=name,
-        path=Path(f"commands/linux/zh-CN/{name}.md"),
-        metadata={"summary": summary},
+def make_document(
+    document_id,
+    category="platforms",
+    platform="windows",
+    tool=None,
+    summary="测试摘要。",
+    body="## 用途\n\n测试用途。",
+):
+    return KnowledgeDocument(
+        id=document_id,
+        category=category,
+        platform=platform,
+        tool=tool,
+        language="zh-CN",
+        summary=summary,
         body=body,
     )
 
 
-def test_search_matches_command_name():
-    """普通搜索应匹配命令名称."""
-    command = make_command("copy", "复制文件")
-
-    assert search_commands([command], "copy") == [command]
-
-
-def test_search_matches_summary():
-    """普通搜索应匹配 summary."""
-    command = make_command("cp", "复制文件和目录")
-
-    assert search_commands([command], "复制文件") == [command]
-
-
-def test_search_does_not_match_body_without_full():
-    """普通搜索不应匹配 Markdown 正文."""
-    command = make_command("cp", "复制文件", "保留文件属性")
-
-    assert search_commands([command], "保留文件") == []
-
-
-def test_full_search_matches_body():
-    """full 模式应额外匹配 Markdown 正文."""
-    command = make_command("cp", "复制文件", "保留文件属性")
-
-    assert search_commands([command], "保留文件", full=True) == [command]
-
-
-def test_search_uses_or_matching():
-    """多个关键词采用 OR 匹配."""
-    command = make_command("cp", "复制文件")
-
-    assert search_commands([command], "复制 删除") == [command]
-
-
-def test_search_ranks_more_keyword_matches_first():
-    """命中关键词更多的文档应排在前面."""
-    first = make_command("cp", "复制文件")
-    second = make_command("robocopy", "复制文件和目录")
-
-    results = search_commands(
-        [first, second],
-        "复制 文件 目录",
+def make_knowledge(*documents):
+    return KnowledgeBase(
+        platform="windows",
+        language="zh-CN",
+        documents=tuple(documents),
     )
 
-    assert results == [second, first]
+
+def result_ids(results):
+    return tuple(item.document.id for item in results)
 
 
-def test_search_uses_name_order_when_relevance_is_equal():
-    """相关度相同时应按命令名称排序."""
-    commands = [
-        make_command("robocopy", "复制目录"),
-        make_command("cp", "复制文件"),
-    ]
+def test_search_returns_empty_for_empty_keyword():
+    knowledge = make_knowledge(make_document("platforms/windows/zh-CN/dir.md"))
 
-    results = search_commands(commands, "复制")
-
-    assert [command.name for command in results] == ["cp", "robocopy"]
+    assert search_knowledge(knowledge, "") == ()
+    assert search_knowledge(knowledge, "   ") == ()
 
 
-def test_search_is_case_insensitive():
-    """搜索应忽略英文大小写."""
-    command = make_command("Git", "版本控制工具")
+def test_search_returns_empty_when_no_query_units():
+    knowledge = make_knowledge(make_document("platforms/windows/zh-CN/dir.md"))
 
-    assert search_commands([command], "GIT") == [command]
-
-
-def test_search_deduplicates_keywords():
-    """重复关键词不应重复计分."""
-    command = make_command("cp", "复制文件")
-
-    assert search_commands([command], "复制 复制") == [command]
+    assert search_knowledge(knowledge, "!!!") == ()
 
 
-def test_search_returns_empty_for_no_match():
-    """没有匹配项时应返回空列表."""
-    command = make_command("ls", "查看目录")
+def test_search_matches_platform_command_name():
+    document = make_document("platforms/windows/zh-CN/dir.md")
+    knowledge = make_knowledge(document)
 
-    assert search_commands([command], "网络") == []
+    results = search_knowledge(knowledge, "dir")
 
-
-def test_search_returns_empty_for_blank_query():
-    """空白搜索内容应返回空列表."""
-    command = make_command("ls", "查看目录")
-
-    assert search_commands([command], "   ") == []
+    assert result_ids(results) == (document.id,)
 
 
-def test_full_search_does_not_change_result_type():
-    """full 模式仍然只返回命令文档."""
-    command = make_command("cp", "复制文件", "保留属性")
+def test_search_matches_tool_name():
+    document = make_document(
+        "tools/git/zh-CN/git.md",
+        category="tools",
+        platform=None,
+        tool="git",
+    )
+    knowledge = make_knowledge(document)
 
-    results = search_commands([command], "保留", full=True)
+    results = search_knowledge(knowledge, "git")
+
+    assert result_ids(results) == (document.id,)
+
+
+def test_search_matches_nested_tool_command_path():
+    document = make_document(
+        "tools/docker/zh-CN/compose/up.md",
+        category="tools",
+        platform=None,
+        tool="docker",
+    )
+    knowledge = make_knowledge(document)
+
+    results = search_knowledge(knowledge, "compose")
+
+    assert result_ids(results) == (document.id,)
+
+
+def test_search_matches_english_case_insensitively():
+    document = make_document("platforms/windows/zh-CN/dir.md")
+    knowledge = make_knowledge(document)
+
+    results = search_knowledge(knowledge, "DIR")
+
+    assert result_ids(results) == (document.id,)
+
+
+def test_search_uses_english_word_boundaries():
+    document = make_document(
+        "platforms/windows/zh-CN/dir.md",
+        summary="Listing directory contents.",
+        body="## 用途\n\nListing directory contents.",
+    )
+    knowledge = make_knowledge(document)
+
+    assert search_knowledge(knowledge, "list") == ()
+    assert result_ids(search_knowledge(knowledge, "listing")) == (document.id,)
+
+
+def test_search_matches_chinese_two_character_fragments():
+    document = make_document(
+        "platforms/windows/zh-CN/dir.md",
+        summary="管理文件和目录。",
+    )
+    knowledge = make_knowledge(document)
+
+    results = search_knowledge(knowledge, "文件")
+
+    assert result_ids(results) == (document.id,)
+
+
+def test_search_matches_single_chinese_character():
+    document = make_document(
+        "platforms/windows/zh-CN/dir.md",
+        summary="管理文件和目录。",
+    )
+    knowledge = make_knowledge(document)
+
+    results = search_knowledge(knowledge, "文")
+
+    assert result_ids(results) == (document.id,)
+
+
+def test_search_matches_usage_section():
+    document = make_document(
+        "platforms/windows/zh-CN/dir.md",
+        summary="目录操作。",
+        body="## 用途\n\n显示当前目录中的文件。\n\n## 基本语法\n\n其他内容。",
+    )
+    knowledge = make_knowledge(document)
+
+    results = search_knowledge(knowledge, "当前目录")
+
+    assert result_ids(results) == (document.id,)
+
+
+def test_search_does_not_search_other_body_sections_by_default():
+    document = make_document(
+        "platforms/windows/zh-CN/dir.md",
+        summary="目录操作。",
+        body="## 用途\n\n查看目录。\n\n## 常用示例\n\n搜索特殊内容。",
+    )
+    knowledge = make_knowledge(document)
+
+    assert search_knowledge(knowledge, "特殊内容") == ()
+
+
+def test_search_full_includes_other_body_sections():
+    document = make_document(
+        "platforms/windows/zh-CN/dir.md",
+        summary="目录操作。",
+        body="## 用途\n\n查看目录。\n\n## 常用示例\n\n搜索特殊内容。",
+    )
+    knowledge = make_knowledge(document)
+
+    results = search_knowledge(knowledge, "特殊内容", full=True)
+
+    assert result_ids(results) == (document.id,)
+
+
+def test_search_uses_or_for_multiple_keywords():
+    first = make_document(
+        "platforms/windows/zh-CN/dir.md",
+        summary="查看目录内容。",
+    )
+    second = make_document(
+        "platforms/windows/zh-CN/copy.md",
+        summary="复制文件。",
+    )
+    knowledge = make_knowledge(first, second)
+
+    results = search_knowledge(knowledge, "目录 文件")
+
+    assert set(result_ids(results)) == {first.id, second.id}
+
+
+def test_search_prioritizes_name_over_summary():
+    name_match = make_document(
+        "platforms/windows/zh-CN/copy.md",
+        summary="复制文件。",
+    )
+    summary_match = make_document(
+        "platforms/windows/zh-CN/dir.md",
+        summary="使用 copy 功能。",
+    )
+    knowledge = make_knowledge(summary_match, name_match)
+
+    results = search_knowledge(knowledge, "copy")
+
+    assert result_ids(results)[0] == name_match.id
+
+
+def test_search_returns_results_in_stable_order_for_equal_scores():
+    second = make_document(
+        "platforms/windows/zh-CN/second.md",
+        summary="相同摘要。",
+    )
+    first = make_document(
+        "platforms/windows/zh-CN/first.md",
+        summary="相同摘要。",
+    )
+    knowledge = make_knowledge(second, first)
+
+    results = search_knowledge(knowledge, "相同摘要")
+
+    assert result_ids(results) == (first.id, second.id)
+
+
+def test_search_results_have_positive_scores():
+    document = make_document(
+        "platforms/windows/zh-CN/dir.md",
+        summary="查看目录。",
+    )
+    knowledge = make_knowledge(document)
+
+    results = search_knowledge(knowledge, "目录")
 
     assert len(results) == 1
-    assert results[0] is command
+    assert results[0].score > 0

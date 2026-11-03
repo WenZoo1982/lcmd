@@ -1,64 +1,25 @@
-"""LCMD 知识库路径管理."""
-
-from dataclasses import dataclass
 from pathlib import Path
 
-from platformdirs import user_data_path
+from platformdirs import user_config_path, user_data_path
 
-from lcmd.core.config import AppConfig
-
-
-class PathError(Exception):
-    """知识库路径异常."""
+_APP_NAME = "lcmd"
 
 
-@dataclass(frozen=True)
-class KnowledgeDirs:
-    """知识库目录路径."""
-
-    root: Path
-    commands: Path
+def get_config_dir() -> Path:
+    """获取 LCMD 用户配置目录。"""
+    return Path(user_config_path(_APP_NAME, appauthor=False))
 
 
-def get_default_knowledge_dir() -> Path:
-    """获取当前系统的默认知识库根目录."""
-    return Path(user_data_path("lcmd", appauthor=False)) / "knowledge"
+def get_config_file() -> Path:
+    """获取 LCMD 配置文件路径。"""
+    return get_config_dir() / "config.toml"
 
 
-def get_knowledge_root(config: AppConfig) -> Path:
-    """根据配置获取知识库根目录."""
-    if config.path is not None:
-        return config.path
-
-    return get_default_knowledge_dir()
+def get_data_dir() -> Path:
+    """获取 LCMD 用户数据目录。"""
+    return Path(user_data_path(_APP_NAME, appauthor=False))
 
 
-def validate_knowledge_root(path: Path | str) -> Path:
-    """检查知识库根目录是否存在且为目录."""
-    root = Path(path).expanduser()
-
-    try:
-        root = root.resolve()
-
-        if not root.exists():
-            raise PathError(f"知识库目录不存在：{root}")
-
-        if not root.is_dir():
-            raise PathError(f"知识库路径不是目录：{root}")
-
-        return root
-
-    except PathError:
-        raise
-    except (OSError, RuntimeError) as exc:
-        raise PathError(f"无法访问知识库目录：{root}。原因：{exc}") from exc
-
-
-def get_knowledge_dirs(config: AppConfig) -> KnowledgeDirs:
-    """根据平台和语言配置推导命令目录."""
-    root = get_knowledge_root(config)
-
-    return KnowledgeDirs(
-        root=root,
-        commands=root / "commands" / config.platform / config.language,
-    )
+def get_default_knowledge_path() -> Path:
+    """获取默认知识库目录。"""
+    return get_data_dir() / "knowledge"

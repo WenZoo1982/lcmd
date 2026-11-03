@@ -1,47 +1,42 @@
-"""LCMD Markdown Front Matter 解析器."""
-
 import tomllib
 from dataclasses import dataclass
-from typing import Any
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ParsedDocument:
-    """解析后的 Markdown 文档."""
+    """解析后的文档中间数据。"""
 
-    metadata: dict[str, Any]
+    metadata: dict[str, object]
     body: str
 
 
 class DocumentParseError(ValueError):
-    """Markdown 文档 Front Matter 解析异常."""
+    """文档 Front Matter 无法解析。"""
 
 
 def parse_document(content: str) -> ParsedDocument:
-    """解析 Markdown 文档中的 TOML Front Matter 和正文.
-
-    Front Matter 必须以独立的 +++ 行开始和结束。
-    正文内容原样保留，不进行清理或格式转换。
-    """
+    """解析 TOML Front Matter，并保留完整 Markdown 正文。"""
     lines = content.splitlines(keepends=True)
 
     if not lines or lines[0].rstrip("\r\n") != "+++":
-        raise DocumentParseError("Front Matter 必须以独立的 +++ 开始标记。")
+        raise DocumentParseError("文档缺少 Front Matter 起始标记。")
 
-    closing_index = next(
-        (index for index, line in enumerate(lines[1:], start=1) if line.rstrip("\r\n") == "+++"),
-        None,
-    )
+    closing_index = None
+
+    for index in range(1, len(lines)):
+        if lines[index].rstrip("\r\n") == "+++":
+            closing_index = index
+            break
 
     if closing_index is None:
-        raise DocumentParseError("Front Matter 缺少独立的 +++ 结束标记。")
+        raise DocumentParseError("文档缺少 Front Matter 结束标记。")
 
     front_matter = "".join(lines[1:closing_index])
 
     try:
         metadata = tomllib.loads(front_matter)
     except tomllib.TOMLDecodeError as exc:
-        raise DocumentParseError(f"Front Matter TOML 格式错误：{exc}") from exc
+        raise DocumentParseError("Front Matter TOML 格式错误。") from exc
 
     body = "".join(lines[closing_index + 1 :])
 

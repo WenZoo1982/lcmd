@@ -37,6 +37,7 @@ addopts = "-ra"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+extend-exclude = ["LCMD-DEV.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

@@ -1,47 +1,39 @@
-"""LCMD 知识文档 Schema 校验器."""
-
-from typing import Literal
-
 from lcmd.knowledge.parser import ParsedDocument
 
 
 class DocumentValidationError(ValueError):
-    """知识文档 Schema 校验异常."""
+    """知识文档不符合格式规范。"""
 
 
-def validate_document(
-    document: ParsedDocument,
-    document_type: Literal["command"],
-) -> dict:
-    """校验解析后的命令知识文档，并返回符合 Schema 的元数据.
+def validate_document(document: ParsedDocument) -> None:
+    """验证解析后的知识文档是否符合 LCMD 文档格式。"""
+    if not isinstance(document.metadata, dict):
+        raise DocumentValidationError("Front Matter 必须是 TOML 表格。")
 
-    Args:
-        document: Parser 返回的解析结果。
-        document_type: 文档类型，目前只支持 command。
+    if set(document.metadata) != {"summary"}:
+        raise DocumentValidationError("Front Matter 必须且只能包含 summary 字段。")
 
-    Returns:
-        通过校验的元数据字典。
-
-    Raises:
-        ValueError: 文档类型不受支持。
-        DocumentValidationError: 文档不符合 Schema。
-    """
-    if document_type != "command":
-        raise ValueError(f"不支持的文档类型：{document_type}")
-
-    allowed_fields = {"summary"}
-
-    unknown_fields = set(document.metadata) - allowed_fields
-    if unknown_fields:
-        fields = "、".join(sorted(unknown_fields))
-        raise DocumentValidationError(f"存在未定义字段：{fields}")
-
-    summary = document.metadata.get("summary")
+    summary = document.metadata["summary"]
 
     if not isinstance(summary, str) or not summary.strip():
-        raise DocumentValidationError("必填字段 summary 必须是非空字符串。")
+        raise DocumentValidationError("summary 必须是非空字符串。")
 
-    if not document.body.strip():
-        raise DocumentValidationError("Markdown 正文不能为空。")
+    body = document.body
 
-    return dict(document.metadata)
+    if not isinstance(body, str):
+        raise DocumentValidationError("正文必须是字符串。")
+
+    lines = body.splitlines()
+
+    separator_index = next(
+        (index for index, line in enumerate(lines) if line.strip()),
+        None,
+    )
+
+    if separator_index is None or lines[separator_index] != "---":
+        raise DocumentValidationError("正文必须以独立行 --- 开始。")
+
+    content = "\n".join(lines[separator_index + 1 :])
+
+    if not content.strip():
+        raise DocumentValidationError("正文内容不能为空。")

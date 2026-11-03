@@ -1,266 +1,290 @@
-"""LCMD CLI 应用."""
-
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any
 
 import typer
+from rich.console import Console
 from typer.core import TyperGroup
 
 from lcmd import __version__
-from lcmd.core.config import (
-    SUPPORTED_LANGUAGES,
-    SUPPORTED_PLATFORMS,
-    AppConfig,
-    ConfigError,
-    load_config,
-    save_config,
-)
+from lcmd.core.config import AppConfig, ConfigError, load_config, save_config
+from lcmd.core.paths import get_config_file, get_default_knowledge_path
 from lcmd.knowledge.loader import (
     KnowledgeLoadError,
+    discover_catalog,
     load_knowledge,
-    load_knowledge_version,
 )
-from lcmd.knowledge.lookup import find_command
-from lcmd.knowledge.search import search_commands
-from lcmd.output.renderer import print_error, print_markdown, print_warning
+from lcmd.knowledge.models import KnowledgeBase, KnowledgeCatalog
+from lcmd.knowledge.query import query_document
+from lcmd.knowledge.search import search_knowledge
+from lcmd.output.renderer import render_query_result, render_search_results
 
 
-class LCMDGroup(TyperGroup):
-    """支持直接查询命令名称的 Typer 命令组."""
+@dataclass(frozen=True, slots=True)
+class AppState:
+    config: AppConfig
+    catalog: KnowledgeCatalog | None
+    knowledge: KnowledgeBase | None
 
-    def get_help_option(self, ctx: typer.Context) -> Any:
-        """将默认帮助选项的英文提示改为中文."""
-        option = super().get_help_option(ctx)
 
-        if option is not None:
-            option.help = "显示此帮助信息并退出。"
-
-        return option
+class DynamicTyperGroup(TyperGroup):
+    """将未注册的命令名及其参数交给动态知识库查询。"""
 
     def resolve_command(
         self,
         ctx: typer.Context,
         args: list[str],
     ) -> tuple[str | None, Any, list[str]]:
-        """优先解析已注册子命令，未匹配时转入知识库查询."""
-        if args:
-            command_name = args[0]
-            registered_command = self.get_command(ctx, command_name)
+        if not args:
+            return super().resolve_command(ctx, args)
 
-            if registered_command is None:
-                lookup_command = self.get_command(
-                    ctx,
-                    "_lcmd_lookup_internal",
-                )
+        command_name = args[0]
 
-                if lookup_command is not None:
-                    ctx.meta["lcmd_lookup_name"] = command_name
-                    return command_name, lookup_command, args[1:]
+        if command_name in self.commands or command_name.startswith("-"):
+            return super().resolve_command(ctx, args)
 
-        return super().resolve_command(ctx, args)
+        ctx.meta["lcmd_dynamic_arguments"] = list(args)
 
+        placeholder_command = TyperGroup(
+            name=command_name,
+            commands={},
+        )
 
-app = typer.Typer(
-    name="lcmd",
-    help="简体中文命令行速查与学习工具。",
-    cls=LCMDGroup,
-    add_completion=False,
-    no_args_is_help=True,
-    invoke_without_command=True,
-)
+        return command_name, placeholder_command, args[1:]
 
 
-@app.callback()
-def main(
-    ctx: typer.Context,
-    version: bool = typer.Option(
-        False,
-        "--version",
-        "-v",
-        help="显示 LCMD 版本。",
-        is_eager=True,
-    ),
-) -> None:
-    """LCMD 命令行入口."""
-    if version:
-        typer.echo(f"LCMD 主程序版本：{__version__}")
+def initialize_state(
+    config_file: Path | None = None,
+    default_knowledge_path: Path | None = None,
+) -> AppState:
+    """读取配置并尝试初始化知识库。"""
+    config_file = config_file or get_config_file()
 
-        try:
-            config = load_config()
-            knowledge_version = load_knowledge_version(config)
-            typer.echo(f"LCMD 知识库版本：{knowledge_version}")
-        except (ConfigError, KnowledgeLoadError) as exc:
-            typer.echo(f"LCMD 知识库版本：不可用（{exc}）")
+    if config_file.is_file():
+        config = load_config(config_file)
+    else:
+        config = AppConfig(knowledge_path=default_knowledge_path or get_default_knowledge_path())
 
-        raise typer.Exit()
+    knowledge_path = config.knowledge_path
+    if knowledge_path is None:
+        knowledge_path = default_knowledge_path or get_default_knowledge_path()
+        config = replace(config, knowledge_path=knowledge_path)
 
     try:
-        config = load_config()
-    except ConfigError as exc:
-        print_error(str(exc))
-        raise typer.Exit(code=1) from exc
+        catalog = discover_catalog(knowledge_path)
+        knowledge = load_knowledge(catalog, config.platform, config.language)
+    except (KnowledgeLoadError, OSError):
+        return AppState(
+            config=config,
+            catalog=None,
+            knowledge=None,
+        )
 
-    # 平台和语言管理只依赖配置，不需要加载知识库。
-    if ctx.invoked_subcommand in {"platform", "language"}:
-        ctx.obj = config
-        return
+    if not config_file.is_file():
+        save_config(config, config_file)
 
-    try:
-        knowledge = load_knowledge(config)
-    except KnowledgeLoadError as exc:
-        print_error(str(exc))
-        raise typer.Exit(code=1) from exc
-
-    ctx.obj = knowledge
-
-    for diagnostic in knowledge.diagnostics:
-        print_warning(f"{diagnostic.path}：{diagnostic.message}")
-
-
-@app.command()
-def platform(
-    ctx: typer.Context,
-    name: str | None = typer.Argument(
-        None,
-        help="要切换到的平台：windows 或 linux。",
-    ),
-) -> None:
-    """查看或切换知识平台."""
-    config: AppConfig = ctx.obj
-
-    if name is None:
-        typer.echo(f"当前知识平台：{config.platform}")
-        return
-
-    if name not in SUPPORTED_PLATFORMS:
-        allowed = "、".join(sorted(SUPPORTED_PLATFORMS))
-        print_error(f"不支持的平台：{name}。允许的值：{allowed}。")
-        raise typer.Exit(code=1)
-
-    if name == config.platform:
-        typer.echo(f"当前知识平台已经是：{name}")
-        return
-
-    updated_config = replace(config, platform=name)
-
-    try:
-        save_config(updated_config)
-    except ConfigError as exc:
-        print_error(str(exc))
-        raise typer.Exit(code=1) from exc
-
-    typer.echo(f"知识平台已切换为：{name}")
-
-
-@app.command()
-def language(
-    ctx: typer.Context,
-    name: str | None = typer.Argument(
-        None,
-        help="要切换到的语言：zh-CN 或 en-US。",
-    ),
-) -> None:
-    """查看或切换知识语言."""
-    config: AppConfig = ctx.obj
-
-    if name is None:
-        typer.echo(f"当前知识语言：{config.language}")
-        return
-
-    if name not in SUPPORTED_LANGUAGES:
-        allowed = "、".join(sorted(SUPPORTED_LANGUAGES))
-        print_error(f"不支持的语言：{name}。允许的值：{allowed}。")
-        raise typer.Exit(code=1)
-
-    if name == config.language:
-        typer.echo(f"当前知识语言已经是：{name}")
-        return
-
-    updated_config = replace(config, language=name)
-
-    try:
-        save_config(updated_config)
-    except ConfigError as exc:
-        print_error(str(exc))
-        raise typer.Exit(code=1) from exc
-
-    typer.echo(f"知识语言已切换为：{name}")
-
-
-@app.command()
-def search(
-    ctx: typer.Context,
-    query: str = typer.Argument(
-        ...,
-        help="要搜索的功能或关键词。",
-    ),
-    full: bool = typer.Option(
-        False,
-        "--full",
-        help="扩大搜索范围，额外搜索 Markdown 正文。",
-    ),
-) -> None:
-    """通过功能关键词搜索命令."""
-    results = search_commands(
-        ctx.obj.commands,
-        query,
-        full=full,
+    return AppState(
+        config=config,
+        catalog=catalog,
+        knowledge=knowledge,
     )
 
-    if not results:
-        print_warning(
-            "未找到匹配的命令。请尝试使用更简短、准确的关键词重新搜索，"
-            "也可以使用 `--full` 扩大搜索范围。"
-        )
+
+def switch_platform(state: AppState, platform: str, config_file: Path) -> AppState:
+    """验证并切换平台，成功加载后才保存配置。"""
+    if state.catalog is None:
+        raise KnowledgeLoadError("知识库不可用。")
+
+    new_config = replace(state.config, platform=platform.lower())
+    knowledge = load_knowledge(state.catalog, new_config.platform, new_config.language)
+
+    save_config(new_config, config_file)
+
+    return AppState(
+        config=new_config,
+        catalog=state.catalog,
+        knowledge=knowledge,
+    )
+
+
+def switch_language(state: AppState, language: str, config_file: Path) -> AppState:
+    """验证并切换语言，成功加载后才保存配置。"""
+    if state.catalog is None:
+        raise KnowledgeLoadError("知识库不可用。")
+
+    new_config = replace(state.config, language=language)
+    knowledge = load_knowledge(state.catalog, new_config.platform, new_config.language)
+
+    save_config(new_config, config_file)
+
+    return AppState(
+        config=new_config,
+        catalog=state.catalog,
+        knowledge=knowledge,
+    )
+
+
+def _show_platforms(state: AppState, console: Console) -> None:
+    console.print(f"当前平台：{state.config.platform}")
+
+    if state.catalog is None:
+        console.print("可用平台：无法获取（知识库不可用）", style="yellow")
         return
 
-    lines = [
-        f"# 搜索结果：{query}",
-        "",
-        f"找到 {len(results)} 条相关命令",
-        "",
-    ]
-
-    for command in results:
-        lines.extend(
-            [
-                f"- **`{command.name}`**",
-                f"  {command.metadata['summary']}",
-            ]
-        )
-
-    print_markdown("\n".join(lines))
+    console.print("可用平台：" + "、".join(item.name for item in state.catalog.platforms))
 
 
-@app.command(
-    name="_lcmd_lookup_internal",
-    hidden=True,
-)
-def _lookup_command(ctx: typer.Context) -> None:
-    """执行 LCMD 内部命令查询."""
-    parent_ctx = ctx.parent
+def _show_languages(state: AppState, console: Console) -> None:
+    console.print(f"当前语言：{state.config.language}")
 
-    if parent_ctx is None:
-        print_error("无法获取命令查询上下文。")
-        raise typer.Exit(code=1)
+    if state.catalog is None:
+        console.print("可用语言：无法获取（知识库不可用）", style="yellow")
+        return
 
-    command_name = parent_ctx.meta.get("lcmd_lookup_name")
+    selected = next(
+        (item for item in state.catalog.platforms if item.name == state.config.platform),
+        None,
+    )
 
-    if not isinstance(command_name, str):
-        print_error("无法获取待查询的命令名称。")
-        raise typer.Exit(code=1)
+    if selected is None:
+        console.print("可用语言：无法获取（当前平台不存在）", style="yellow")
+        return
+
+    console.print("可用语言：" + "、".join(selected.languages))
+
+
+def _show_version(console: Console) -> None:
+    """显示版本信息，不加载知识文档，也不写入配置。"""
+    console.print(f"LCMD：{__version__}")
 
     try:
-        command = find_command(ctx.obj.commands, command_name)
-    except ValueError as exc:
-        print_error(str(exc))
-        raise typer.Exit(code=1) from exc
+        config_file = get_config_file()
 
-    if command is None:
-        print_warning(f"知识库尚未收录该命令：{command_name}")
-        return
+        if config_file.is_file():
+            config = load_config(config_file)
+        else:
+            config = AppConfig(knowledge_path=get_default_knowledge_path())
 
-    summary = command.metadata["summary"]
-    content = f"# {command.name}\n\n{summary}\n\n{command.body}"
+        knowledge_path = config.knowledge_path or get_default_knowledge_path()
+        catalog = discover_catalog(knowledge_path)
+    except (ConfigError, KnowledgeLoadError, OSError):
+        console.print("知识库：不可用", style="yellow")
+    else:
+        console.print(f"知识库：{catalog.version}")
 
-    print_markdown(content)
+
+def create_app() -> typer.Typer:
+    """创建 LCMD 命令行应用。"""
+    app = typer.Typer(
+        cls=DynamicTyperGroup,
+        invoke_without_command=True,
+        no_args_is_help=True,
+        add_completion=False,
+        help="多平台命令速查与学习工具。",
+    )
+
+    @app.callback()
+    def callback(
+        ctx: typer.Context,
+        version: bool = typer.Option(
+            False,
+            "--version",
+            "-v",
+            help="显示程序和知识库版本。",
+        ),
+    ) -> None:
+        console = Console()
+
+        if version:
+            _show_version(console)
+            raise typer.Exit()
+
+        try:
+            state = initialize_state()
+        except (ConfigError, KnowledgeLoadError, OSError):
+            console.print("LCMD 初始化失败，请检查配置。", style="red")
+            raise typer.Exit(code=1) from None
+
+        ctx.obj = state
+
+        dynamic_arguments = ctx.meta.get("lcmd_dynamic_arguments")
+        if dynamic_arguments is not None:
+            if state.knowledge is None:
+                console.print("知识库不可用，无法查询命令。", style="red")
+                raise typer.Exit(code=1)
+
+            result = query_document(state.knowledge, dynamic_arguments)
+            render_query_result(result, console)
+            raise typer.Exit()
+
+        if ctx.invoked_subcommand is None and not ctx.args:
+            console.print(ctx.get_help())
+            raise typer.Exit()
+
+    @app.command("search")
+    def search_command(
+        ctx: typer.Context,
+        keyword: list[str] = typer.Argument(..., help="一个或多个搜索关键词。"),  # noqa: B008  # noqa: B008
+        full: bool = typer.Option(
+            False,
+            "--full",
+            help="搜索文档全文。",
+        ),
+    ) -> None:
+        state: AppState = ctx.find_root().obj
+
+        if state.knowledge is None:
+            console = Console()
+            console.print("知识库不可用，无法搜索。", style="red")
+            raise typer.Exit(code=1)
+
+        results = search_knowledge(
+            state.knowledge,
+            " ".join(keyword),
+            full=full,
+        )
+        render_search_results(results)
+
+    @app.command("platform")
+    def platform_command(
+        ctx: typer.Context,
+        platform: str | None = typer.Argument(None),
+    ) -> None:
+        state: AppState = ctx.find_root().obj
+        console = Console()
+        config_file = get_config_file()
+
+        if platform is None:
+            _show_platforms(state, console)
+            return
+
+        try:
+            new_state = switch_platform(state, platform, config_file)
+        except (KnowledgeLoadError, ConfigError):
+            console.print("平台切换失败，当前配置保持不变。", style="red")
+            raise typer.Exit(code=1) from None
+
+        console.print(f"已切换平台：{new_state.config.platform}")
+
+    @app.command("language")
+    def language_command(
+        ctx: typer.Context,
+        language: str | None = typer.Argument(None),
+    ) -> None:
+        state: AppState = ctx.find_root().obj
+        console = Console()
+        config_file = get_config_file()
+
+        if language is None:
+            _show_languages(state, console)
+            return
+
+        try:
+            new_state = switch_language(state, language, config_file)
+        except (KnowledgeLoadError, ConfigError):
+            console.print("语言切换失败，当前配置保持不变。", style="red")
+            raise typer.Exit(code=1) from None
+
+        console.print(f"已切换语言：{new_state.config.language}")
+
+    return app
