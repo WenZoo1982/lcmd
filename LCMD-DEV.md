@@ -5,7 +5,7 @@
 - 主程序仓库：https://github.com/WenZoo1982/lcmd
 - 知识库仓库：https://github.com/WenZoo1982/lcmd-kb
 - 本地项目目录：D:\Project_DEV\lcmd
-- 当前开发阶段：P5 平台与语言管理已完成实现、验收并推送至 GitHub；P6 知识库仓库与首批内容正在进行
+- 当前开发阶段：P5 已完成；P6 正在完成新架构设计冻结，尚未开始清理和重建主程序
 - 首发目标：Windows x64、Linux AMD64；macOS 和 ARM64 暂不纳入首发。
 
 ---
@@ -576,7 +576,7 @@ language = "zh-CN"
 - 可用语言从所选平台实际存在的语言目录动态发现；工具内容也按当前语言读取。
 - `lcmd platform` 显示当前平台和知识库中发现的可用平台；`lcmd platform <name>` 切换到指定平台。
 - `lcmd language` 显示当前平台可用的语言和当前选择；`lcmd language <name>` 切换语言。
-- 切换前验证目标平台及语言目录存在且符合结构要求；成功后只更新对应配置字段，不改变 `path`。
+- 目录发现阶段从实际目录和符合命名规则的 Markdown 文件发现平台及候选语言；切换前还必须尝试加载目标平台/语言，确认至少有一篇有效平台命令文档。只有验证成功才保存配置；失败时保留原配置，不改变 `path`。
 - 当目标平台没有当前语言时，必须明确提示该平台提供哪些语言；不得静默切换语言、平台或知识库路径。用户应先选择该平台实际提供的语言。
 - 主程序不得硬编码 `windows`、`linux`、`macos`、`harmonyos` 等平台清单，也不得硬编码 `zh-CN`、`en-US` 等固定语言允许值。
 - 知识库路径不可用时，`platform`、`language` 至少仍可查看当前配置值；无法读取知识库时应明确说明不能发现或验证可用值，不得伪造列表。是否允许在离线/路径失效状态下强制设置未验证值，P6 设计时明确，默认不得保存未经验证的值。
@@ -595,27 +595,155 @@ language = "zh-CN"
 - 若查询路径对应的子命令目录存在、但没有对应的同名 Markdown 文档，则显示该目录下可用的下一级子命令列表。
 - 工具名称及子命令路径均由知识库目录/文档推导，不能在主程序中维护 Git、Docker 等名称或子命令清单。
 - 查询解析必须支持规范允许的多级子命令路径，并保证与主程序公开选项、`search`、`platform`、`language` 等 CLI 命令不产生不可控冲突。
+- 平台命令与第三方工具允许同名。执行简洁查询（如 lcmd git、lcmd ls）时，若平台命令和工具入口同时匹配，必须同时返回并展示，不要求用户使用额外的 command 或 tool 前缀，也不得静默覆盖其中一方。
+- 查询结果允许同时包含匹配文档和下一级子命令。若文档与同名目录同时存在，显示文档并同时列出该目录下的子命令。
+- 工具目录没有同名入口文档时，只有一篇有效 Markdown 文档则直接显示该文档；有多篇有效文档则显示可用文档/子命令列表。该规则同样适用于子命令路径，不任意挑选多篇文档中的一篇。
+- search、platform、language 等 LCMD 公开子命令及全局选项保留为 CLI 入口，不被知识库同名文档覆盖；其他名称按知识库内容查询。
 - 文档唯一 ID 直接采用相对于 `commands/` 根目录的规范化知识库路径，使用 `/` 作为逻辑分隔符，并保留 `.md` 扩展名；例如 `platforms/windows/zh-CN/dir.md`、`tools/git/zh-CN/init.md`、`tools/docker/zh-CN/compose/up.md`。该 ID 自然包含类别、平台或工具、语言及完整命令路径，不使用标题、summary 或用户输入生成 ID，也不依赖操作系统本地路径分隔符。
 
 ### 14.5 Loader、Parser、Validator 与 Search 的通用要求
 
-- Loader 同时支持平台命令和工具文档；目录发现、递归层级和文档 ID 均按通用规则实现，不为 Git 或 Docker 编写专属加载器。每篇文档的唯一 ID 使用相对于 `commands/` 根目录的规范化路径（统一 `/` 分隔并包含 `.md`），与 14.4 节定义一致。
-- `manifest.json` 是知识库根目录必需文件，只负责提供知识库版本号；第一版严格只包含 `version` 一个字段，值采用 SemVer `Major.Minor.Patch`。不得在 manifest 中维护平台、语言、工具、命令、文档路径或数量清单；这些内容一律从 `commands/` 实际目录和文档动态发现。主程序校验 manifest 的 JSON 格式、字段结构及版本兼容性；缺失或无效 manifest 属于知识库整体错误。
-- Parser 继续解析 UTF-8 Markdown + TOML Front Matter。每篇有效知识文档的 Front Matter 只保留必需字段 `summary`，必须存在且为非空字符串；不设置重复的 `title` 元数据。文档正文必须且只能有一个一级标题（`# 标题`），该标题允许中文或英文，必须是 Front Matter 后正文的第一项内容（允许前置空行）；标题之后才是正文。Parser 从此位置读取文档标题，不把正文中的其他标题误认为文档标题。
-- Validator 根据 Loader 提供的目录上下文校验文档结构；不通过 Front Matter 的 `type` 字段区分文档类别。类别、平台/工具标识、语言和子命令路径均从受控目录结构及文件名推导。Front Matter 只允许并要求一个字段 `summary`，其值必须是非空字符串；不得增加 `title` 或重复表达路径信息的字段。正文必须且只能有一个一级标题；该标题必须是正文第一项内容（允许前置空行），作为文档标题。
-- 知识文档采用简洁、实用的 Markdown 内容风格，以用户提供的 `dir` 文档示例为基准：Front Matter 后使用一级标题，正文按内容需要组织章节。`用途`、`基本语法`、`常用参数`、`常用示例`、`必要注意事项` 为推荐章节名称，不要求每篇文档全部包含，也允许按命令或工具特点增加、调整章节。
-- 命令和语法可直接以内联文本或普通段落呈现，不强制全部使用代码块；适合对照的参数或操作可使用 Markdown 表格；示例命令后应提供必要说明。只写有实际价值的内容，不为填满章节而堆砌信息。
-- 单篇文档错误继续隔离并报告诊断，不应导致其他有效文档无法加载。
-- Search 仅检索当前选择的平台命令与当前语言下的工具文档；搜索范围由目录结构动态确定，不按具体平台或工具名称编写特例。
-- 搜索保持离线；不读取系统 man 手册，不做在线搜索，不恢复 tasks 文档类型。
-- 搜索由主程序自主实现，不引入第三方搜索引擎或中文分词库；使用项目现有依赖与 Python 标准库。
-- 普通搜索字段包括命令名称、工具名称、完整子命令路径、`summary` 和正文中的“用途”说明；`--full` 在此基础上增加常用参数、常用示例及其他正文内容。
-- `summary` 是简洁、通俗的一句话用途概括，不是关键词列表；所有 Markdown 文档（包括平台命令文档、工具入口页和子命令详细页）都必须提供非空 `summary`。
-- 中文匹配采用连续双字片段方式；单字查询保留单字匹配能力。英文按单词边界切分并进行大小写归一化。该方案属于字面检索，不承诺识别同义词或理解自然语言语义。
-- 多关键词采用 OR 逻辑：任一关键词片段命中即可进入候选结果；通过完整短语命中、命令/工具标识命中、字段权重及匹配覆盖程度计算相关度并排序。命令名称/工具名称/子命令路径权重最高，其次为 `summary`，再其次为“用途”；`--full` 扩展正文参与匹配。具体分值通过测试样例校准，不在规范中预设任意数字。
-- 搜索帮助建议用户输入简短、明确的核心关键词；更长的自然语言句子不保证提高搜索准确率。搜索提示不得暗示系统具备语义理解或同义词扩展能力。
-- 搜索结果默认每页 5 条。结果不超过 5 条时直接显示；超过 5 条且处于交互式终端时才启动分页，按 Enter 查看下一页，按 Q 退出。非交互终端、管道或重定向场景直接输出全部结果，不启动交互分页。
-- 现有平台命令精确查询、`--full`、OR 关键词匹配、相关度排序等行为纳入回归测试。
+#### Manifest 与目录发现
+
+- manifest.json 是知识库根目录必需文件，只负责提供知识库版本号；第一版严格只包含 version 一个字段，值采用 SemVer Major.Minor.Patch。不得在 manifest 中维护平台、语言、工具、命令、文档路径或数量清单；这些内容一律从 commands/ 实际目录和文档动态发现。主程序校验 manifest 的 JSON 格式、字段结构及版本兼容性；缺失或无效 manifest 属于知识库整体错误。
+- Loader 分为目录发现和内容加载两个步骤，但仍由同一个 loader.py 模块负责，不额外拆分 discovery 模块。
+- discover_catalog(root: Path) 读取并验证知识库根目录、manifest 和目录结构，动态发现平台、平台语言、工具及每个工具自己的语言。目录清单不保存 Markdown 正文。
+- 目录发现阶段只判断目录、文件路径和命名规则是否有效；不把文件存在等同于正文有效。平台语言切换必须进一步尝试加载目标语言，确认至少存在一篇有效的平台命令文档后才能保存配置。
+- 每个工具的语言独立发现。当前平台/语言加载时，工具若没有对应语言目录或没有有效文档，只跳过该工具；不得因此阻断平台命令和其他工具的加载，也不得静默回退到其他语言。
+- 当前平台/语言下没有任何有效平台命令文档时，本次知识加载失败；单篇文档损坏只隔离该文档。工具文档全部缺失或损坏，不影响有效平台命令继续使用。
+
+#### Markdown 文档格式与 Parser
+
+所有知识文档使用 UTF-8 Markdown + TOML Front Matter，正式格式如下：
+
+~~~markdown
++++
+
+summary = "查看当前目录中的文件和子目录，并按名称、类型或时间筛选。"
+
++++
+
+---
+
+## 用途
+
+列出当前目录或指定目录中的文件和子目录。
+
+## 常用示例
+
+dir -File -Filter *.zip
+
+只列出当前目录中扩展名为 .zip 的文件。
+~~~
+
+- 文件以独立的 +++ 行开始 Front Matter，并以另一独立的 +++ 行结束；Front Matter 使用 TOML。分隔符前后允许空行。
+- Front Matter 只允许且必须包含一个字段 summary，值必须是去除首尾空白后仍非空的字符串。不设置 title、type、aliases、keywords 或其他重复表达路径信息的字段。
+- Front Matter 结束后，正文必须以独立的 --- Markdown 分隔线开始；该分隔线属于正文，Parser 必须保留。
+- 正文使用 Markdown 二级标题组织章节，例如 ## 用途、## 基本语法、## 常用参数、## 常用示例、## 必要注意事项。这些章节为推荐结构，不要求每篇文档全部包含；可按实际内容增删或调整。
+- 正文不设置用于重复文档名称的一级标题。文档显示名称由知识库路径推导，不从 Markdown 正文提取，也不通过 Front Matter 的 title 维护。
+- Parser 只负责解析 TOML 和分离正文：完整保留 TOML 元数据供 Validator 检查，并保留 --- 分隔线及其后的 Markdown 正文。Parser 不负责路径、slug、文档类别或内容质量校验。
+- TOML 语法错误、Front Matter 分隔符缺失/不完整、正文分隔线缺失等无法解析的情况，视为单篇文档解析失败。
+- Parser 使用 Python 标准库 tomllib，不增加 TOML 第三方依赖。
+
+#### Validator
+
+- Validator 检查 Front Matter 是否只有且必须包含 summary，并验证其为非空字符串；未知字段、重复 TOML 键或非法类型均拒绝该文档。
+- Validator 检查正文分隔线和正文非空；不强制固定章节、示例数量或参数覆盖率，不因普通 Markdown 排版不够规范但仍可正常解析而拒绝文档。
+- Validator 根据 Loader 提供的相对路径上下文检查目录层级、slug、语言目录、扩展名、Windows 保留设备名、大小写/规范化冲突和路径安全。
+- 逻辑文档 ID 使用相对于 commands/ 根目录的 POSIX 路径，统一使用 / 分隔并保留 .md 扩展名；实际文件访问时再转换为当前系统的路径对象。
+- 在读取文件前必须完成路径安全检查：拒绝绝对路径、路径穿越、越界符号链接和解析后实际路径越出知识库根目录的情况；只读取知识库范围内的普通文件。
+- 文档类别、平台/工具标识、语言和命令路径均从目录结构推导，不使用 Front Matter 的 type 字段。
+
+#### 统一数据模型
+
+所有数据模型集中定义在 knowledge/models.py，采用冻结 dataclass 和 tuple 集合；不建立平台命令与工具文档的继承体系。
+
+- PlatformInfo(name, languages)：一个平台及其候选语言目录。
+- ToolInfo(name, languages)：一个第三方工具及其独立的候选语言目录。
+- KnowledgeCatalog(root, version, platforms, tools)：知识库根目录、manifest 版本、动态发现的平台和工具目录清单。
+- KnowledgeDocument(id, category, platform, tool, language, summary, body)：统一文档模型。平台文档的 platform 非空、tool 为空；工具文档相反。类别仅为 platforms 或 tools。
+- 文档 id 是相对于 commands/ 的规范化路径。显示名称由该路径推导，不重复保存 title、name 或 relative_path 字段。
+- KnowledgeBase(platform, language, documents)：当前选择范围内成功加载的文档集合，不重复持有完整 Catalog。
+- QueryResult(documents, children)：精确查询可同时返回匹配文档集合和下一级子命令名称集合；两者都为空表示未找到。
+- SearchResult(document, score)：搜索结果引用统一文档模型并保存相关度。
+- Parser 的中间模型 ParsedDocument(metadata, body) 保存完整 Front Matter 元数据和正文；Parser 不提前丢弃未知字段，Validator 校验通过后，Loader 才生成 KnowledgeDocument。
+
+#### 模块边界与接口
+
+目标源码结构：
+
+~~~text
+src/lcmd/
+├── __init__.py
+├── __main__.py
+├── main.py
+├── cli/
+│   └── app.py
+├── core/
+│   ├── config.py
+│   └── paths.py
+├── knowledge/
+│   ├── models.py
+│   ├── loader.py
+│   ├── parser.py
+│   ├── validator.py
+│   ├── query.py
+│   └── search.py
+└── output/
+    └── renderer.py
+~~~
+
+- core/config.py：配置模型、读取、写入和原子保存；继续使用现有 [knowledge] 配置节及 path/platform/language 字段，不改变用户配置文件格式。
+- core/paths.py：只负责应用配置目录、数据目录和默认知识库路径定位，不扫描知识库内容。
+- knowledge/models.py：集中定义上述数据模型，不依赖项目其他模块。
+- knowledge/parser.py：parse_document(content: str) -> ParsedDocument；只解析 TOML 和正文。
+- knowledge/validator.py：提供文档相对路径校验和解析结果 Schema 校验；不依赖 CLI、Renderer 或 Loader。
+- knowledge/loader.py：discover_catalog(root: Path) -> KnowledgeCatalog；load_knowledge(catalog, platform, language) -> KnowledgeBase。负责目录发现、文件读取、Parser/Validator 协调和单篇错误隔离。
+- knowledge/query.py：query_document(knowledge, arguments) -> QueryResult；只在已加载的数据中进行精确查询，不读取文件系统。
+- knowledge/search.py：search_knowledge(knowledge, keyword, full=False) -> tuple[SearchResult, ...]；只在当前 KnowledgeBase 中搜索，不读取文件系统。
+- output/renderer.py：使用 Rich 显示文档、同名匹配结果、子命令列表和搜索结果；负责交互式分页，不执行查询、不读取文件。
+- cli/app.py：负责 Typer 命令入口、配置/知识库流程协调、参数处理和用户可见提示；不承载 Parser、Loader、Query 或 Search 的内部实现。
+- main.py 与 __main__.py 只负责程序入口。
+
+依赖方向约束：Models 不依赖其他项目模块；Parser 和 Validator 不依赖 Loader/CLI；Loader 依赖 Models、Parser、Validator；Query/Search 只依赖 Models；Renderer 只依赖输出所需模型和 Rich；CLI 负责组合调用。不得产生循环依赖，不增加没有明确需求的 services、repositories、adapters、插件框架或注册表。
+
+#### 精确查询与搜索
+
+- 精确查询使用 lcmd <name> 和 lcmd <tool> <subcommand...>。用户输入不区分 ASCII 英文字母大小写，匹配前规范化；路径段必须符合 slug 规则，不允许用户参数直接构造任意文件路径。
+- 平台命令和工具入口同名时同时返回，不设置 AMBIGUOUS 状态，不增加 command、tool 前缀。
+- 查询文档和同名子命令目录可以同时存在；QueryResult 同时返回文档和 children。
+- 没有工具入口 <tool>.md 且只有一篇有效文档时直接显示该文档；有多篇时显示可用文档/子命令列表。
+- search、platform、language 和全局选项为 CLI 保留入口，优先由 CLI 处理；知识库文档不得覆盖这些入口。
+- Search 仅检索当前平台的系统命令和当前语言下存在有效文档的工具；不搜索其他平台或其他语言。
+- 普通搜索字段包括命令名称、工具名称、完整子命令路径、summary 和正文“用途”说明；--full 在普通搜索字段基础上增加常用参数、常用示例及其他正文。
+- 中文采用连续双字片段匹配，单字查询保留单字匹配能力；英文按单词边界切分并忽略大小写；中英文混合查询统一参与字面匹配。
+- 多关键词采用 OR 逻辑，任一关键词片段命中即可进入候选；按完整短语命中、命令/工具标识、字段权重及匹配覆盖度计算相关度。名称/完整子命令路径优先级最高，其次 summary，再其次用途；--full 扩展正文参与匹配。具体权重通过测试校准，不在规范中预设任意分值。
+- 不引入中文分词库、同义词库、语义搜索或在线搜索。搜索不承诺理解自然语言语义；不要求知识文档堆砌关键词、aliases 或 keywords。
+- 搜索结果显示文档名称、用途摘要及来源类别；平台命令显示平台来源，第三方工具显示工具来源。同名内容同时显示，不能相互覆盖。
+- 搜索结果默认每页 5 条；不超过 5 条直接显示。超过 5 条且处于交互式终端时才分页，按 Enter 查看下一页、按 Q 退出；非交互终端、管道或重定向直接输出全部结果。精确查询不进入搜索分页。
+- Search 负责匹配和排序；Renderer 负责显示和分页；CLI 负责调用两者。搜索排序相同的结果按文档唯一 ID 稳定排序。
+- 搜索规则沿用此前已确认的设计，不因新架构重建而引入额外字段或重新设计搜索功能。
+
+#### 错误边界
+
+- 知识库整体错误：知识库根目录不可用、manifest 缺失/无效、Major 不兼容、commands 根目录缺失等；由 Loader 以明确的整体错误向 CLI 传递，本次加载停止。
+- 单篇文档错误：文件无法读取、TOML 解析失败、Schema 不合规或路径不合规；Loader 隔离该文档，继续加载其他文档，不向普通用户展示内部路径、诊断报告或异常堆栈。
+- 当前平台/语言没有任何有效平台命令文档：本次加载失败；配置切换不保存目标值。
+- 个别工具没有当前语言或没有有效文档：跳过该工具，不回退到其他语言，不影响其他内容。
+- 普通查询没有匹配文档或子命令：显示“未找到相关命令或工具。”
+- 当前查询命中文档但确实无法正常显示：显示“知识内容暂时无法正常显示。”
+- 不引入日志框架、日志文件或面向普通用户的错误代码体系；内部异常只用于控制流程。
+
+#### 测试验收要求
+
+- 目录发现：动态增加未知平台、未知语言、未知工具，无需修改主程序；平台语言与工具语言独立发现。
+- 文档解析/校验：TOML、未知字段、重复键、summary 类型/空值、缺失 Front Matter、缺失正文 ---、空正文、CRLF、UTF-8、Markdown 正文保留。
+- 路径安全：非法 slug、大小写冲突、保留设备名、绝对路径、路径穿越、符号链接逃逸、越界解析路径。
+- Loader：平台文档、工具入口、单篇综合文档、多级子命令；单篇损坏隔离；工具缺语言不影响其他工具；平台当前语言无有效命令时拒绝加载。
+- Query：大小写不敏感、平台命令与工具同名同时展示、文档与同名目录并存、单篇综合文档、多篇子命令列表、多级路径和未命中。
+- Search：沿用已确认的中文双字片段、单字、英文单词边界、中英文混合、OR、字段范围、相关度排序、稳定排序及 --full。
+- CLI/Renderer：配置切换成功/失败保护、同名文档来源标注、分页阈值、交互式与非交互式输出、普通用户提示。
+- 自动化测试通过不替代真实 CLI 验收；最终必须在 Windows 11 PowerShell 和 Linux Mint 环境完成真实 CLI 验收。
 
 ### 14.6 旧结构迁移与兼容性
 
@@ -631,7 +759,7 @@ language = "zh-CN"
 
 1. **最小测试知识库（已完成初版）**：独立知识库仓库已搭建 `platforms/` 与 `tools/` 目录，并放入 Windows/Linux 平台命令、Git 导航与子命令、Docker 多级子命令及 SSH 单篇工具文档。样例用于验证目录与查询模型，不代表最终内容规范已冻结。
 2. **主程序审计（已完成）**：已检查远程主程序文件树、主要源码模块、CLI、测试文件和依赖，形成保留、重构、删除、新增建议。远程审计结论不代替用户本地 Git 工作区状态核验。
-3. **冻结新架构设计**：明确文档 Front Matter Schema（不设置 `type`，类别由路径推导）、文档唯一 ID、工具子命令路径编码、目录及大小写规则、平台/语言发现、语言缺页策略、CLI 参数解析与同名冲突处理、搜索索引与结果规则，以及模块职责和依赖方向。设计确认并写入本总控文档后，才开始清理旧实现。
+3. **冻结新架构设计**：明确正式 Markdown 格式（TOML summary + 正文 `---` 分隔线 + Markdown 二级章节，不使用一级标题作为文档标题）、文档 Schema、唯一 ID、统一数据模型、目录及大小写规则、平台/工具独立语言发现、工具语言缺页策略、同名文档同时展示、文档与子目录并存、Query/Search 接口、模块职责与依赖方向、错误边界和测试验收契约。设计确认并写入本总控文档后，才开始清理旧实现。
 4. **清理旧主程序实现并建立新骨架**：在主程序仓库中删除旧的 `src/lcmd/` 实现和旧的 `tests/`，按冻结后的最终结构重新建立源码与测试。此操作只清理旧实现，不删除 Git 仓库、不重建仓库、不清除 Git 提交历史；`pyproject.toml`、README、`.gitignore`、`.gitattributes` 等根文件逐项审查，符合新项目要求的保留并修订，不适用的删除。README 按新架构重写。
 5. **实现平台/语言动态发现与配置切换**：使用临时新增的平台目录验证主程序无需代码改动即可发现并切换；验证目标平台缺少当前语言时的明确提示。保留必要配置行为，但不保留固定平台/语言枚举。
 6. **实现通用知识库核心**：实现 `platforms/` 与 `tools/` 的目录发现、加载、解析、校验、精确查询和搜索；不为 Git、Docker 或其他具体工具编写特例。
@@ -682,3 +810,120 @@ P6 不以“在旧程序上增加新功能”为完成标准，而以形成职�
 - 重建后只维护一套当前架构、一套对应测试和本总控文档，不保留旧架构兼容层。
 
 此决策是 P6 的正式执行约束，实际清理与重建尚未开始。
+
+### 14.10 P6 新架构接口与数据模型冻结补充（设计已确认，尚未实现）
+
+本节补充 14.5 的可执行数据模型和模块契约。若历史章节中的旧实现描述与本节目标设计冲突，以 14.5、14.10 的新架构契约为准；历史阶段记录只用于说明当时的实现状态，不代表新架构仍保留旧行为。
+
+#### 数据模型
+
+~~~python
+@dataclass(frozen=True, slots=True)
+class PlatformInfo:
+    name: str
+    languages: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True)
+class ToolInfo:
+    name: str
+    languages: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeCatalog:
+    root: Path
+    version: str
+    platforms: tuple[PlatformInfo, ...]
+    tools: tuple[ToolInfo, ...]
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeDocument:
+    id: str
+    category: Literal["platforms", "tools"]
+    platform: str | None
+    tool: str | None
+    language: str
+    summary: str
+    body: str
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeBase:
+    platform: str
+    language: str
+    documents: tuple[KnowledgeDocument, ...]
+
+@dataclass(frozen=True, slots=True)
+class QueryResult:
+    documents: tuple[KnowledgeDocument, ...]
+    children: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True)
+class SearchResult:
+    document: KnowledgeDocument
+    score: float
+~~~
+
+- 所有数据类使用 frozen=True, slots=True；集合使用 tuple，避免向调用方暴露可变列表。
+- KnowledgeCatalog.root 是知识库根目录；文档 ID 相对于 root/commands/，因此 Loader 可通过受控根目录与 ID 定位文件。
+- KnowledgeDocument.category 仅为固定类别 platforms 或 tools；平台名称、工具名称和语言均为动态字符串，不使用平台/工具/语言 Literal 枚举。
+- KnowledgeDocument.platform 与 tool 必须且只能有一个非空。显示名称由 ID 路径推导为只读属性，不保存重复的 name 或 title 字段。
+- 平台命令显示名称为文件主文件名；工具入口 <tool>.md 显示工具名；工具子命令名称由工具名与相对语言目录的子命令路径组成。
+- KnowledgeBase 不重复持有 Catalog；CLI 分别持有 Catalog 和当前 KnowledgeBase。Catalog 用于发现与配置管理，KnowledgeBase 用于查询和搜索。
+- QueryResult.documents 可同时包含平台命令和工具的同名文档；children 可与 documents 同时非空。两者都为空表示未找到。
+- ParsedDocument 是 Parser 的中间结果，包含完整 TOML 元数据映射和正文；Parser 不提前丢弃未知字段，Validator 校验通过后 Loader 才生成 KnowledgeDocument。
+
+#### 配置模型与接口
+
+- 配置文件保持现有 [knowledge] TOML 节和 path、platform、language 三个字段，不改变用户配置格式。
+- 配置数据模型对应 AppConfig(path, platform, language)；path 指向知识库根目录，平台和语言只保存标识。
+- core/config.py 提供配置读取和原子保存；core/paths.py 提供应用配置目录、数据目录和默认知识库路径。
+- discover_catalog(root: Path) -> KnowledgeCatalog 负责整体知识库检查和全局目录发现，不解析所有 Markdown 正文。
+- load_knowledge(catalog, platform, language) -> KnowledgeBase 负责加载指定平台/语言下的有效平台命令，以及具有对应语言内容的工具文档。
+- query_document(knowledge, arguments) -> QueryResult 只查询内存中的已加载文档。
+- search_knowledge(knowledge, keyword, full=False) -> tuple[SearchResult, ...] 只搜索内存中的已加载文档。
+- parse_document(content: str) -> ParsedDocument 负责 TOML Front Matter 和 Markdown 正文分离。
+- Validator 分别校验相对文档路径和 ParsedDocument Schema；Loader 负责调用顺序和单篇错误隔离。
+
+#### 语言发现与加载边界
+
+- Catalog 中的平台语言是目录发现阶段找到的候选语言；工具语言是每个工具独立发现的候选语言。
+- 候选语言目录必须存在，并包含至少一篇路径/文件名符合规范的 Markdown 文件。
+- 目录发现不解析正文；因此候选目录不等于最终有效内容。切换平台或语言时必须尝试加载目标平台语言，确认至少一篇有效平台命令文档后才保存配置。
+- 加载当前平台/语言时，平台文档逐篇解析和校验；有效文档进入 KnowledgeBase，单篇失败跳过。
+- 当前平台/语言没有任何有效平台命令文档时，加载失败，原配置不变。
+- 工具按各自语言目录独立加载；工具缺少当前语言或其文档全部无效时跳过该工具，不进行跨语言回退，不阻断平台命令和其他工具。
+- 配置路径不可用时仍可读取和显示已保存的配置值，但不能伪造可用平台/语言清单，也不能保存未经验证的新选择。
+
+#### 异常策略
+
+- 只建立必要的整体知识库错误边界；manifest、根目录、commands 根目录或版本兼容性错误导致本次加载失败。
+- 单篇文档解析/校验错误在 Loader 内部捕获并隔离，不中止其他文档加载。
+- 不为每一种文件错误建立复杂的异常继承树，不输出诊断报告、日志文件或异常堆栈给普通用户。
+- CLI 将整体错误和查询未命中分别转换为已确认的用户提示；不能把整体知识库错误伪装成未找到命令。
+
+#### 模块依赖
+
+~~~text
+cli/app.py
+├── core/config.py
+├── core/paths.py
+├── knowledge/loader.py
+│   ├── knowledge/models.py
+│   ├── knowledge/parser.py
+│   └── knowledge/validator.py
+├── knowledge/query.py
+├── knowledge/search.py
+└── output/renderer.py
+~~~
+
+- Models 不依赖项目其他模块。
+- Parser、Validator 不依赖 Loader、CLI、Renderer。
+- Loader 依赖 Models、Parser、Validator。
+- Query、Search 只依赖 Models。
+- Renderer 负责显示和分页，不访问知识库文件系统，不计算搜索相关度。
+- CLI 是流程协调入口；不在 CLI 内重复实现加载、解析、查询或搜索。
+- 不增加没有明确产品需求的中间层、插件框架、注册表或兼容层。
+
+#### 冻结状态
+
+本节与 14.5 合并后，作为 P6 主程序重建的目标接口和行为契约。尚未代表代码实现或验收完成。开始清理旧源码前，仍须由用户在本地核对 Git 工作区状态；旧实现和旧测试只在该检查通过后一次性清理。
+
