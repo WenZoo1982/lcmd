@@ -5,7 +5,7 @@
 - 主程序仓库：https://github.com/WenZoo1982/lcmd
 - 知识库仓库：https://github.com/WenZoo1982/lcmd-kb
 - 本地项目目录：D:\Project_DEV\lcmd
-- 当前开发阶段：P6 主程序重建及 Windows/Linux Mint 22.3 跨平台验收已完成；知识库格式修复已推送，待 Windows 知识库同步复验及阶段收尾
+- 当前开发阶段：P6 主程序与知识库架构、Windows/Linux Mint 22.3 跨平台验收及知识库同步复验均已完成；进入 P7 统一更新阶段规划
 - 首发目标：Windows x64、Linux AMD64；macOS 和 ARM64 暂不纳入首发。
 
 ---
@@ -1029,6 +1029,35 @@ P6 新架构实现、自动化测试、静态检查、真实知识库集成及 W
 #### 当前结论与后续
 
 - P6 主程序在 Windows 与 Linux Mint 22.3 的自动化和真实 CLI 跨平台验收已完成；Linux 端分页交互未取得实际验证，明确保留为未实测项。
-- 知识库 13 篇格式修复已提交并推送。Linux 本地知识库工作区在提交后应为干净状态；Windows 本地知识库尚待从 GitHub 同步至 `4ad7071` 并复验。
-- 下一步只需在 Windows 的 `D:\\Project_DEV\\lcmd-kb` 同步知识库提交，检查工作区状态并确认四种平台/语言组合仍可加载；不重新测试或推送主程序。
-- Windows 知识库复验完成后，记录结果并关闭 P6 阶段。
+- 知识库 13 篇格式修复已提交并推送，Linux 与 Windows 本地知识库均已同步至 `4ad7071`；Windows 知识库工作区干净。
+- Windows 当前配置 `windows/zh-CN`，真实执行 `lcmd dir` 成功，正确显示中文用途、语法、常用参数、示例和注意事项。
+- Windows 端本轮未重新逐项执行另外三种平台/语言组合加载；四种组合均加载成功的实测记录来自 Linux Mint 22.3 验收，不将其误记为 Windows 本轮复验。
+- 至此 P6 阶段关闭；后续进入 P7 统一更新机制的设计与失败场景规划，不提前实现更新代码。
+
+
+### 15.7 Windows 知识库同步与最终复验（2026-11-03）
+
+#### Windows 知识库同步
+
+- Windows 知识库目录：`D:\\Project_DEV\\lcmd-kb`。
+- 同步前本地 HEAD 为 `ae84d69`，工作区有 13 篇文档的未提交修改。
+- 逐篇检查 `git diff` 后确认，这 13 篇本地修改与 Linux 已推送修复完全一致：每篇只新增 Front Matter 后的正文分隔线 `---`，没有其他内容差异；`git diff --check` 通过。
+- 用户确认后，在 Windows 本地仓库执行 `git reset --hard HEAD`，仅放弃已确认与远程重复的 13 处本地修改；随后 `git pull origin main` 快进至 `4ad7071`。
+- 同步后 `git log -1 --oneline` 显示 `4ad7071 fix: add required markdown body separators`；`git status --short` 无输出，工作区干净。
+
+#### Windows 真实 CLI 复验
+
+- 主程序目录：`D:\\Project_DEV\\lcmd`；使用现有 `.venv` 中的 `lcmd.exe`，未修改主程序代码或配置。
+- `lcmd platform`：当前平台 `windows`；可用平台 `linux`、`windows`。
+- `lcmd language`：当前语言 `zh-CN`；可用语言 `en-US`、`zh-CN`。
+- 首次执行 `lcmd ls` 返回未找到提示；这是预期行为，因为当前选择为 Windows 平台，Windows 知识库使用 `dir`，Linux 知识库使用 `ls`，不属于加载故障。
+- 执行 `lcmd dir` 成功显示 Windows 中文命令文档，包含用途、基本语法、常用参数、常用示例和必要注意事项，证明同步后的 Windows 中文知识文档可被正常解析、加载和渲染。
+- 本轮 Windows 只对当前 `windows/zh-CN` 配置进行真实 CLI 复验；未重新逐项执行 Linux/Windows 与 `zh-CN`/`en-US` 的四种组合加载测试。四种组合加载成功的结果已在 15.6 Linux 验收记录中说明。
+
+#### P6 最终结论
+
+- P6 主程序新架构实现、Windows 与 Linux Mint 22.3 自动化测试、静态检查及真实 CLI 验收均已完成。
+- 知识库格式修复 `4ad7071` 已在 Linux 推送，并已在 Windows 同步；两端知识库均达到该提交。
+- Windows 当前默认配置 `windows/zh-CN` 的实际查询复验通过。
+- Linux 端交互式分页因搜索结果不足 6 条，仍为未实测项；Windows 自动化测试覆盖分页逻辑。该限制如实保留，不作为已实测通过。
+- **P6 阶段正式完成并关闭。** 不再重复执行 P6 全量测试；后续按阶段计划进入 P7 统一更新机制的设计与失败场景规划。
