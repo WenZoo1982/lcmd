@@ -308,6 +308,8 @@ src/lcmd/
 | `cli/app.py` | Typer 应用、动态命令参数接管、初始化状态、search/platform/language 命令 |
 | `core/config.py` | AppConfig、TOML 配置读取/校验/原子保存 |
 | `core/paths.py` | platformdirs 用户配置目录、配置文件和默认知识库目录 |
+| `core/path_security.py` | 知识库路径规范化、安全边界检查、符号链接/Windows 重解析点检查及迁移目标校验 |
+| `core/migration.py` | 知识库迁移事务、SHA-256 完整性校验、迁移日志、旧目录尽力清理与中断恢复核心逻辑 |
 | `knowledge/models.py` | 平台、工具、目录、文档、查询及搜索数据模型 |
 | `knowledge/loader.py` | Manifest 校验、目录动态发现、路径安全检查、Markdown 文档加载 |
 | `knowledge/parser.py` | TOML Front Matter 解析并分离 Markdown 正文 |
@@ -841,7 +843,7 @@ Parser 和 Validator 有意分工：Parser 不因 summary 缺失或正文分隔�
 
 多关键词采用 OR 命中；覆盖奖励使命中更多查询片段的文档更有优势。搜索不扫描磁盘、不联网，也不搜索未加载的平台或语言。
 
-### 13.8 路径安全与知识库迁移：`core/path_security.py`、`core/migration.py`
+### 13.7 路径安全与知识库迁移：`core/path_security.py`、`core/migration.py`
 
 | 函数/类型 | 当前职责与契约 |
 |---|---|
@@ -858,7 +860,7 @@ Parser 和 Validator 有意分工：Parser 不因 summary 缺失或正文分隔�
 
 `migrate_knowledge()` 与 `recover_migration()` 当前是独立核心 API，不代表 CLI 已可调用；启动恢复、交互确认和进度 UI 必须在后续 CLI 接入任务中实现。
 
-### 13.7 终端渲染：`output/renderer.py`
+### 13.8 终端渲染：`output/renderer.py`
 
 | 函数 | 当前职责 |
 |---|---|
