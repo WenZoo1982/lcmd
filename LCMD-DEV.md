@@ -1,682 +1,138 @@
 # LCMD 项目开发总控文档
 
-> 本文档是 LCMD 唯一的开发总控入口。记录已确认的产品设计、技术约束、开发阶段和经核验的实际状态。每次继续开发，先阅读本文档，再核对本地代码、测试结果、Git 状态和 GitHub 远程状态。计划不代表已实现；历史测试结果不代表当前代码已通过测试。
+> 本文档是 LCMD 项目的唯一开发总控入口。它以当前主程序仓库实际代码和已经完成的跨平台/真实 CLI 验收为基线。**已实现、已测试、已确定但未实现、尚未讨论**必须明确区分。后续每次开发开始前，先阅读本文档，再核对本地代码、Git 状态和 GitHub 远程状态；不得把计划写成现成功能。
 
-- 主程序仓库：https://github.com/WenZoo1982/lcmd
-- 知识库仓库：https://github.com/WenZoo1982/lcmd-kb
-- 本地项目目录：D:\Project_DEV\lcmd
-- 当前开发阶段：P6 主程序与知识库架构、Windows/Linux Mint 22.3 跨平台验收及知识库同步复验均已完成；进入 P7 统一更新阶段规划
-- 首发目标：Windows x64、Linux AMD64；macOS 和 ARM64 暂不纳入首发。
+- 主程序仓库：<https://github.com/WenZoo1982/lcmd>
+- 知识库仓库：<https://github.com/WenZoo1982/lcmd-kb>
+- Windows 主程序目录：`D:\Project_DEV\lcmd`
+- Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
+- Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
+- 当前代码基线：主程序 `main` 分支，代码功能提交 `acd04675f74f3f303f7a5e464553a48250940c05`；随后文档验收提交至 `d2b40a51dc53acf988479145df9407c40aecc5f2`
+- 当前阶段：P6 架构及跨平台验收完成；准备以当前真实实现为基线讨论后续安装、更新和自定义知识库路径设计
+- 当前程序版本：`0.1.0`
+- 当前知识库版本：`0.1.0`（本轮 Windows 实际测试输出）
 
 ---
 
 ## 1. 产品定位
 
-LCMD 是面向命令行用户的简体中文命令速查与学习工具，核心理念：**少记忆，易理解；需要时快速查找。**
+LCMD 是面向命令行用户的多平台命令速查与学习工具，核心理念：
 
-- LCMD 只查询知识库，不执行用户输入的系统命令。
-- 不检测系统是否安装某个命令，不做系统命令发现。
-- lcmd <command> 只查询知识库：找到文档就显示；未找到就提示“知识库尚未收录”。
-- 查询是否命中只取决于知识库文档，不取决于目标命令是否安装。
-- 普通查询不联网；只有 lcmd --update 执行联网更新检查。
-- 命令文档重点包括用途、基本语法、常用参数、常用示例及必要注意事项，不复制维护官方完整手册。
-- 知识库内容建设优先完成 `zh-CN`，并配套 `en-US`；文档应简洁、准确、易懂、可复制，对高风险操作给出必要提醒。
+**少记忆，易理解；需要时快速查找。**
 
-## 2. 平台与发行范围
+核心使用场景：
 
-| 平台 | 首发 | 说明 |
-|---|---|---|
-| Windows x64（Intel/AMD，AMD64） | 首发支持 | 独立 .exe 安装程序 |
-| Linux AMD64（x86_64） | 首发支持 | Debian 系 .deb，首发面向 Linux Mint、Ubuntu、Debian |
+1. **知道命令，查用法**：例如 `lcmd ls`，直接查询已知命令的知识文档。
+2. **不知道命令，按功能找**：例如 `lcmd search "复制文件"`，根据用户想完成的任务寻找可能相关的命令或工具。
 
-首发版本仅支持 Windows x64 与 Linux AMD64。macOS、Windows ARM64、Linux ARM64 均不属于首发范围；未来增加新平台时，必须具备对应平台的构建与实际测试环境。
+产品表达：**知道命令，查用法；不知道命令，按功能找。**
 
-说明：
-- AMD64/x86_64、ARM64/AArch64 是处理器架构，不是操作系统名称。
-- Apple Silicon Mac 使用 ARM64，但 ARM64 也用于其他厂商的 Linux 和 Windows 设备。
-- macOS 后续可复用 Python 主体代码，但需要 macOS 构建环境、平台适配和实际测试。
-- Linux .deb 适用于 Debian 系发行版，不代表所有 Linux 发行版通用。图形化双击安装取决于发行版和桌面环境；终端安装可使用 sudo apt install ./安装包.deb。
-- Linux 独立程序仍可能依赖系统共享库；无需预装 Python 不等于完全没有系统依赖。
+产品边界：
 
-## 3. 主程序与知识库架构
+- LCMD 读取本地知识库并展示知识内容，不执行用户输入的系统命令或文档中的示例命令。
+- 不检测目标命令或第三方工具是否安装；知识库中有文档即可查询，与本机是否安装该命令无关。
+- 当前普通查询和搜索不联网。
+- LCMD 不是官方手册的完整镜像。知识库内容面向快速查阅和初学者理解，优先说明用途、基本语法、高频常用参数、常用示例和必要注意事项，不追求罗列全部参数。
+- 命令内容质量与主程序功能必须区分：主程序负责发现、加载、解析、查询和展示；知识库作者负责筛选高频参数、组织内容、核对示例和补充必要提醒。当前 Validator 不会强制检查固定章节或内容质量。
 
-主程序与知识库是两个独立 GitHub 仓库，独立版本管理、独立 Release、独立更新包：
+## 2. 仓库与职责边界
 
-- 主程序：WenZoo1982/lcmd
-- 知识库：WenZoo1982/lcmd-kb
+主程序和知识库是两个独立仓库：
 
-主程序负责 CLI、配置、路径定位、知识库加载、解析、校验、查询、输出和更新。知识库保存 Markdown 文档。新增或修改知识文档原则上不需要修改主程序代码。
-
-### 知识库目录
-
-    lcmd-kb/
-    ├── manifest.json
-    └── commands/
-        ├── platforms/
-        │   ├── <platform>/<language>/
-        │   └── ...
-        └── tools/
-            ├── <tool>/<language>/
-            └── ...
-
-- `commands/` 采用 `platforms/` 与 `tools/` 两个顶层类别：前者保存操作系统平台命令，后者保存第三方命令行工具知识。
-- 平台命令路径为 `platforms/<platform>/<language>/<command>.md`，普通系统命令仍是一条命令一篇文档。
-- 第三方工具路径为 `tools/<tool>/<language>/`；复杂工具可采用导航页与子命令详细页，简单工具可采用单篇综合速查。具体规则见第 14 节。
-- 平台和语言由知识库目录动态发现，不在主程序中维护固定枚举。当前知识库只需包含首发实际提供的平台和语言；未来增加平台或语言时按规范新增目录。
-- 第三方工具知识默认对当前选择的所有平台可见；平台差异须在文档中说明。旧 `common/` 目录不再作为新架构类别，旧内容在 P6 一次性迁移至 `tools/`。
-- 搜索只检索当前选择的平台命令与当前语言下的工具文档。普通搜索覆盖命令/工具名称、完整子命令路径、summary 和用途说明；`--full` 在此基础上增加参数、示例及其他正文。搜索规则见第 14.5 节。
-- Linux Mint、Ubuntu、Debian 共用 Linux 平台知识目录，不按发行版拆分。
-- Linux 首发以 GNU 命令体系为基准，优先覆盖 Ubuntu 22.04 / Debian 12 这一代系统常见 GNU 工具；较新参数在文档中标注版本要求。不专门支持 BusyBox/Toybox。
-
-- 知识库允许逐步收录命令。目录为空或某条命令尚未收录，不代表知识库无效。
-
-### 文档格式
-
-命令文档使用 UTF-8 Markdown + TOML Front Matter：
-
-- 必填 summary：非空字符串。
-- 所有 Markdown 文档（包括工具入口文档、平台命令文档、工具子命令文档及简单工具综合文档）均必须提供非空 `summary`。不设置 `keywords`、`aliases`；搜索字段由目录/文件路径推导，并从文档提取 summary 和正文内容。
-- 不增加 `type` 等重复描述目录信息的 Front Matter 字段。文档类别及标识由路径推导：`platforms/<platform>/<language>/<command>.md` 表示平台命令；`tools/<tool>/<language>/<tool>.md` 表示工具入口/总览文档；工具语言目录下其他 Markdown 文件按相对路径表示工具综合文档或子命令文档，具体查询语义由目录结构确定。
-- Front Matter 首版只要求非空字符串 `summary`，不设置 `type`、`keywords` 或 `aliases`。Parser 负责解析 Front Matter；Validator 校验必填元数据及路径/文档结构约束；Loader 负责发现、加载文档并在内部处理加载问题。
-- 单篇文档格式或内容结构无效时，跳过该文档并继续加载其他有效文档；不得因无关文档的问题中断正常查询。Markdown 排版不够规范但仍可解析时，尽可能正常显示，不额外报错。
-- 普通用户不查看诊断报告、错误代码、内部文件路径或异常堆栈。具体解析原因和文件路径仅作为开发排查信息，不主动输出、不写入日志文件，也不引入日志框架或额外依赖。
-
-## 4. 配置与路径设计
-
-配置文件由 platformdirs.user_config_path() 定位，内容示意：
-
-    [knowledge]
-    platform = "linux"
-    language = "zh-CN"
-
-    # 可选。必须是绝对路径；不设置时使用 platformdirs 默认用户数据目录。
-    # path = "D:/LCMD/knowledge"
-
-- 配置保存 platform、language，以及可选的知识库根目录 path。
-- `path` 始终指向知识库根目录，不随平台或语言切换而改变；必须是绝对路径。
-- `platform` 与 `language` 只保存用户当前选择的目录标识，不保存平台/语言子目录路径。
-- 可用平台从知识库 `commands/platforms/` 实际目录动态发现；可用语言从所选平台实际存在的语言目录动态发现。主程序不得硬编码平台或语言清单。
-- `lcmd platform`、`lcmd language` 显示当前选择和知识库实际提供的可用值；切换前验证目标目录存在且结构有效，成功后只修改相应配置值。
-- 如果目标平台不提供当前语言，明确列出该平台可用语言并要求用户选择；不得静默切换语言、平台或知识库路径。
-- 未设置 path 时使用 platformdirs.user_data_path() 下的默认知识库目录。
-- 缓存和更新临时文件使用 platformdirs.user_cache_path()；配置目录使用 platformdirs.user_config_path()。
-- 安装程序首次安装时检测运行平台和系统语言，生成初始配置。主程序运行时读取配置，不反复检测系统语言或擅自更改平台。
-- 用户手动切换平台/语言，只修改配置字段，按新配置检索；不要求用户更换实际操作系统。
-- 不再支持 LCMD_KNOWLEDGE_DIR 环境变量覆盖。
-- 不静默切换到其他路径、平台或语言。
-
-### 用户可见提示
-
-用户交互只围绕实际使用问题提供简洁提示，不展示 Loader、Parser、Validator 等内部实现信息，不设计面向普通用户的诊断报告或错误代码体系。
-
-- 查询的命令或工具不存在：提示“未找到相关命令或工具。”
-- 切换到知识库未提供的平台：提示该平台不受支持，并列出当前知识库实际提供的平台。
-- 切换到当前平台未提供的语言：提示该语言不受支持，并列出当前平台实际提供的语言。
-- 目标平台或语言已经是当前选择：提示无需切换或已经是当前设置。
-- 当前查询对应的知识文档确实无法解析或正常显示：提示“知识内容暂时无法正常显示。”不暴露内部异常。
-- 知识库路径不可用、manifest 无效或版本不兼容等整体错误：给出简洁、明确且可操作的提示，不伪装成“未找到命令”。
-
-内部文档加载错误应隔离处理：只影响对应文档，其他有效文档继续使用。只有当前操作确实受到影响时，才向用户显示提示；无关文档的问题不得打扰用户。
-
-### 路径错误处理
-
-- 默认知识库目录缺失、损坏或不可访问时，明确显示完整路径和原因，并提供后续修复指引。
-- 用户配置了自定义 path，但路径不存在、不是目录、不可访问或缺少有效 manifest.json 时，明确报错。
-- 自定义路径无效时不自动创建空知识库、不回退到默认目录、不修改用户配置。
-- 知识库更新不需要管理员权限，普通用户即可运行。
-- 主程序安装位置可在任意盘符或路径，不依赖当前工作目录，也不写死盘符。
-
-## 5. Manifest 与版本兼容
-
-知识库 manifest.json 第一版只包含一个字段，示例：
-
-    {"version":"2.5.1"}
-
-采用 SemVer Major.Minor.Patch。
-
-- 主程序和知识库 Major 必须一致；Minor、Patch 不要求一致。
-- Major 表示主程序与知识库之间的结构/协议兼容基线，不与支持平台数量绑定。按既有目录规范新增平台或语言不应仅因此要求修改主程序或提升 Major；只有目录、元数据协议或兼容契约发生不兼容变化时才提升 Major。
-- Minor/Patch 用于主程序功能修正或知识库内容更新，允许独立发布。
-- 普通启动/查询只读取本地版本并比较 Major，不联网。
-- Major 不一致时阻止使用，要求更新不匹配组件。
-- 知识库平台目录为空、命令未收录、资料不完整，不属于版本兼容错误。
-- 主程序发布新 Major 时，必须同步发布对应 Major 的知识库 Release，即使知识库只有目录结构和 manifest，也要形成正式版本。
-
-## 6. CLI 行为
-
-| 命令 | 行为 |
+| 仓库 | 职责 |
 |---|---|
-| lcmd --help / -h | 显示帮助，不联网 |
-| lcmd --version / -v | 显示主程序及本地知识库版本，不联网 |
-| lcmd <command> | 查询当前配置平台的系统命令或第三方工具文档 |
-| lcmd <tool> <subcommand...> | 查询工具的子命令详细文档，支持规范定义的多级路径 |
-| lcmd <command> --full | 扩展资料入口，具体行为待对应阶段实现 |
-| `lcmd search <keyword>` | 使用简短关键词搜索当前平台和语言下的命令/工具文档；结果按相关度排序，必要时分页 |
-| lcmd platform [name] | 查看或切换知识平台 |
-| lcmd language [name] | 查看或切换知识语言 |
-| lcmd --update | 统一检查并更新主程序、知识库 |
+| `WenZoo1982/lcmd` | CLI、配置、路径定位、知识库发现/加载、解析/校验、查询、搜索、终端渲染 |
+| `WenZoo1982/lcmd-kb` | Manifest 和 Markdown 知识文档 |
 
-- 命令名称精确匹配，不区分大小写。
-- 平台系统命令从 `platforms/<selected-platform>/<selected-language>/` 查询；第三方工具从 `tools/<tool>/<selected-language>/` 查询。
-- 工具导航页与子命令详细页按通用文档类型和路径规则识别，不得按具体工具名称分支判断。
-- 不检查系统命令或第三方工具是否安装，不执行用户输入；普通查询不联网。
-- `lcmd <command>` 和 `lcmd <tool> <subcommand...>` 是精确文档查询，不进入搜索分页；只有 `lcmd search <keyword>` 的搜索结果超过分页阈值时才可能启动分页。
+两者独立维护。新增平台、语言、工具或命令内容，原则上只修改知识库目录和 Markdown，不应因此修改主程序。主程序只在通用机制确有缺陷或需要新增通用能力时修改。
 
-## 7. 统一更新机制
+当前程序不包含知识库下载、更新、安装程序、自定义路径 CLI 管理入口。不得因为总控文档讨论过这些方向，就将它们描述为已经实现。
 
-统一更新入口为 lcmd --update，用户不单独选择更新主程序还是知识库。
+## 3. 当前知识库目录与文档合同
 
-- 主程序与知识库独立发布，但统一检查、用户确认、下载、验证和更新。
-- 是否更新：分别比较两个组件的完整 SemVer；任一组件有新版本即列入更新。
-- 是否兼容：检查更新目标组合的 Major 是否一致。
-- 目标组合 Major 不一致，视为发布过程中的临时维护状态，提示“LCMD 更新服务暂时维护中，请稍后重试”；不下载、不安装、不改本地内容。
-- 所有待更新组件先下载到临时目录并验证，再进行切换；任一组件失败时保留旧版本并恢复原兼容组合。
-- 主程序与知识库安装位置不同，必须设计明确的备份、提交和回滚流程，不能假设跨目录替换天然原子化。
-- 更新前列出版本和更新内容，必须由用户确认，不自动更新。
-- 更新知识库前提示用户自行备份自定义文档。程序不识别、不区分、不备份、不合并、不恢复用户自定义文档；官方知识库按发布包整体替换，用户自行承担自定义内容被覆盖的风险。
-- 下载和校验至少验证文件完整性、SHA256、manifest、目录结构和版本兼容性；签名方案在更新阶段设计并测试。
-- 更新失败保留旧版本，显示具体原因；不影响普通查询。
-- 更新源固定 GitHub Releases。
-
-## 8. 独立程序安装与发布
-
-用户选择独立程序安装：最终用户不需要预装 Python，下载 LCMD 安装包即可使用。
-
-- 源码继续使用 Python 开发；发布时为各目标平台构建独立程序包，包含所需 Python 运行时。
-- Windows 首发提供 x64 .exe 安装程序，采用安装向导。
-- Linux 首发提供 AMD64 .deb，面向 Linux Mint、Ubuntu、Debian。
-- 主程序与知识库分别发布 GitHub Release；主程序 Release 提供平台安装包，知识库 Release 提供完整知识库 ZIP。
-- macOS（Intel、Apple Silicon）和 ARM64 Linux 暂列后续目标。
-- Linux 包需声明必要系统共享库/包依赖。具体打包工具和构建流水线尚未选定，须在打包阶段比较后决定。
-- 不允许把“Windows 上可运行 Python 源码”误写成“Windows 可以直接构建所有平台安装包”。macOS 构建和测试需要 macOS 环境。
-
-## 9. 当前技术基线
-
-- 开发系统：Windows 11，PowerShell 5.1。
-- 本地项目：D:\Project_DEV\lcmd。
-- Python：3.14.10；项目声明最低 Python 3.11。
-- 虚拟环境：.venv。
-- 统一使用：
-  - .\.venv\Scripts\python.exe
-  - .\.venv\Scripts\ruff.exe
-  - .\.venv\Scripts\lcmd.exe
-- 已采用：Typer、Rich、platformdirs、tomllib、setuptools、pytest、Ruff。
-- 开发采用测试先行；阶段验收包括定向测试、全量 pytest、Ruff lint、Ruff format、必要的真实 CLI 验证和 Git 状态检查。
-- 不做无关的广泛诊断；先围绕当前明确目标进行最小范围、证据驱动的检查。
-
-## 10. 开发阶段计划（稳定交付路线）
-
-开发原则：以首发可用为目标，优先完成用户能直接感知的核心能力；避免提前建设复杂架构、重复拆分小阶段或为尚未使用的功能预留过度抽象。
-
-| 阶段 | 交付目标 | 主要工作 | 完成标准 |
-|---|---|---|---|
-| P3.2 收尾 | 将已验收的配置/路径改动安全并入主分支 | 审查 6 个源码/测试文件；确认测试与差异；独立提交并推送代码 | 已完成；代码提交 `22674fe` 已推送至 `main`；文档独立更新 |
-| P3.3 | 补齐现有 CLI 合同 | `--version` 同时显示主程序和本地知识库版本；支持 `en-US` 知识文档；中文帮助提示；验证平台专属优先与 common 回退 | 已完成并推送；129 项测试通过，Ruff 检查/格式通过，真实 CLI 验收通过；代码提交 `7d5ac6239abe0c57ffae65097f0c5306149c172f` |
-| P4 | 内容搜索 | 仅搜索 commands；普通搜索匹配文档名称和 summary；`--full` 额外搜索 Markdown 正文；支持多关键词、相关度排序；离线运行 | 已完成并推送；132 项测试通过，Ruff 检查/格式通过，真实 CLI 验收通过；代码提交 `e397732c5930b8edf1bb0be57266fa67b7faa65c` |
-| P5 | 平台与语言管理 | 首发仅支持 Windows、Linux；实现 `platform`、`language` 查看和切换；配置持久化与输入校验；管理命令不依赖知识库成功加载 | 已完成实现、验收并推送；27 项配置测试、29 项 CLI 测试、148 项全量测试通过；Ruff lint/format 通过；真实 CLI 验证平台/语言切换、重复设置、非法值保护及知识库路径失效时管理命令仍可用。代码提交 `5ead529` 已推送至 `main` |
-| P6 | 知识库驱动的平台/语言与工具扩展架构 | 统一为 `platforms/` + `tools/`；实现平台/语言动态发现、配置切换、工具导航及多级子命令的通用加载/查询/搜索；以 Git、Docker 和新增测试平台验证；迁移旧知识库结构 | 新增平台、语言、工具或子命令只需按规范增加知识库目录/文档；不因新增名称修改主程序；自动化测试、静态检查、真实 CLI 和迁移回归通过 |
-| P7 | 统一更新 | GitHub Releases 版本检查、下载、校验、用户确认、替换、失败恢复 | 主程序/知识库分别更新；兼容性与失败场景有测试；普通查询仍离线 |
-| P8 | 安装包与跨平台构建 | Windows x64 安装包、Linux AMD64 .deb；安装位置与用户数据分离 | 在目标系统完成干净安装、启动、升级和卸载验证 |
-| P9 | 首发验收 | 整理用户文档、版本说明、Release 资产与发布检查清单 | Windows x64、Linux AMD64 首发范围逐项验收通过 |
-
-### 执行顺序与范围控制
-
-1. P3.2、P3.3 已完成并推送；后续按 P4、P5、P6、P7、P8、P9 的顺序推进。
-2. P3.3 只修复已经确认的 CLI 合同差异，不借机重构 CLI。
-3. P4 已完成；P5 仅支持 Windows、Linux 两个平台，完成平台/语言管理。管理命令只读取和保存配置，不加载知识库；不重构 Loader。
-4. P6 先实现知识库驱动的平台/语言发现、配置切换及工具层级查询通用机制，再集中建设真实命令知识库，避免主程序功能和内容编写互相阻塞。
-5. P7 更新系统是高风险阶段，先完成流程设计和失败场景测试，再实现替换/回滚。
-6. P8 先保证 Windows x64，再完成 Linux AMD64；不为首发加入 macOS、ARM64。
-7. 不把缓存、临时目录、备份回滚等更新专用机制提前独立开发；按 P7 的实际更新流程一次性设计。
-8. 每个阶段以“可运行、可验证、可交付”为完成标准。测试通过后记录结果并提交；不因文档写了计划就视为实现完成。
-
-### 每阶段固定交付流程
-
-- 开始：读取本总控文档；核对 Git 状态、相关代码和当前阶段依赖。
-- 设计：只确认本阶段必要行为和边界；优先用测试固定规则。
-- 实现：围绕目标最小改动，不顺手扩展无关功能。
-- 验收：定向测试、全量 pytest、Ruff lint/format；涉及 CLI 或路径时做真实运行验证。
-- 收尾：检查 diff 与 Git 状态；代码提交和文档提交分开；更新本总控文档并核验远程。
-
-## 11. GitHub 与本地仓库状态核验记录（2026-11-02）
-
-以下记录区分 GitHub 远程核验结果与用户本地执行结果。远程代码内容可核验，但 pytest、Ruff 和真实 CLI 验收由用户在本机执行。
-
-### 主程序仓库 WenZoo1982/lcmd
-
-- 默认分支：main。
-- 当前 `main` 最新代码提交：`22674fea7d03343a41bfeb7ef62966bb930647ab`，提交信息 `feat: support configurable knowledge paths and common fallback`。
-- P3.2 代码提交包含 6 个文件：3 个源码文件和 3 个测试文件；变更为 313 insertions、74 deletions。
-- 远程存在 pyproject.toml、README.md、LCMD-DEV.md、src/lcmd/ 和 tests/。
-- 远程源码包含配置、路径、Parser、Validator、Loader、命令精确查询、Rich Markdown 输出等模块。
-- 当前主程序版本源码为 0.1.0。
-- 当前远程测试文件：test_cli.py、test_config.py、test_loader.py、test_lookup.py、test_parser.py、test_paths.py、test_renderer.py、test_validator.py。
-- 远程没有发现 GitHub Release。
-- GitHub 文件内容和目录已核验；本次没有在 GitHub 远程执行 pytest 或 Ruff。
-
-### 知识库仓库 WenZoo1982/lcmd-kb
-
-- 默认分支：main。
-- 根目录当前只有 README.md。
-- 该段为较早的历史快照；当前知识库状态以第 12 节最新核验记录为准。
-- 远程没有发现 GitHub Release。
-
-### 远程源码与最终设计的已知差异
-
-1. `--version` 已同时显示主程序版本和本地知识库版本；该行为已由 P3.3 自动化测试及真实 CLI 验证。
-2. `--help` 的主要说明为中文，但 Typer 的部分帮助提示（例如 `Show this message and exit.`）仍为英文；完整帮助中文化及分层示例属于后续帮助系统完善事项。
-3. `search`、`platform`、`language` 已实现；统一更新、独立打包和安装流程尚未实现。
-4. 安装程序生成初始配置的流程尚未实现。
-5. 当前查询未命中时提示知识库未收录；不实现系统命令发现。
-
-上述差异需要通过后续测试和实现逐项解决，不能只修改文档后就认为代码已符合设计。
-
-## 12. 当前状态与下一步
-
-### 当前真实状态（2026-11-02）
-
-#### 主程序仓库 WenZoo1982/lcmd
-
-- 默认分支：`main`。
-- 当前远程代码最新提交：`7d5ac6239abe0c57ffae65097f0c5306149c172f`。
-- 提交信息：`feat: add English knowledge support and version reporting`。
-- P3.3 代码提交相对前一代码提交 `273a362ef70d0f723d26d286c2cc51d36666b57c`，修改 6 个源码/测试文件，110 insertions、15 deletions。
-- 用户已确认代码推送成功：`main -> main`。
-- 本地提交后 `git status --short` 无输出，工作区干净（以用户提交的本地终端输出为准）。
-
-#### P3.3 自动化与静态检查
-
-用户在本地对最终提交内容执行并反馈：
-
-- `pytest -q`：129 passed in 0.99s。
-- `ruff check .`：All checks passed!。
-- `ruff format --check .`：25 files already formatted。
-
-#### P3.3 真实 CLI 验收
-
-以下项目均由用户在本机实际执行：
-
-- `lcmd --version`：通过，同时显示主程序版本 `0.1.0` 和知识库版本 `0.1.0`。
-- `lcmd -v`：通过，输出与长版本参数一致。
-- `lcmd --help`：通过，帮助选项提示为中文。
-- `lcmd dir`：通过，命中 Windows 英文知识文档并正确显示内容。
-- `lcmd git`：通过，Windows 专属文档不存在时回退到 common 英文文档。
-- 平台优先级：通过。临时同名测试文档验证 Windows 专属文档优先于 common。
-- common 回退：通过。临时移走 Windows 文档后，成功显示 common 文档。
-- `lcmd ls`：输出“知识库尚未收录该命令”。检查确认 Windows 和 common 目录均无对应文档，属于预期未收录提示，不是失败。
-- 临时测试文档和配置已由测试脚本恢复；当前配置恢复为 `en-US`，知识库路径为用户配置的本地知识库目录。
-
-#### P3.3 结论
-
-P3.3 已完成：代码实现、自动化测试、静态检查、真实 CLI 验收均已通过；代码已推送至 GitHub `main`。主程序与知识库版本显示、英文知识语言支持、平台专属优先/common 回退和帮助提示均已验证。
-
-### P4 当前状态：搜索核心与 CLI 接入已完成并推送
-
-#### 已完成的产品范围调整
-
-- 已确认 `commands/` 是唯一知识文档来源；不再维护独立的 `tasks/` 目录、文档类型或 Schema。
-- 用户输入的任务描述只是搜索查询文本，搜索时匹配命令文档的文件名、`summary` 和 Markdown 正文；搜索结果仍然是命令文档。
-- 官方 man 手册中的单命令资料也归入 commands，按 LCMD 文档规范筛选常用参数和示例，不照搬完整手册。
-- 不实现 `lcmd task` 子命令。
-
-#### 已完成的主程序代码清理
-
-- 用户已在本地完成并推送代码提交：`e27690535a832af024c67430b8f32133f5d01c48`，提交信息 `refactor: remove task document support`。
-- 修改范围：8 个源码/测试文件，27 insertions、269 deletions。
-- 已从路径模型、知识加载结果、Loader、Validator 和测试中移除 tasks 字段、目录推导、加载/回退逻辑、任务文档 Schema 与任务专属测试。
-- 命令文档平台优先、common 回退机制保留；旧任务字段 `commands` 不再是合法命令文档元数据。
-- 用户反馈最终验收：`pytest -q` 为 116 passed；`ruff check .` 和 `ruff format --check .` 均通过；`git diff --check` 通过。
-- 用户实际运行虚拟环境中的 CLI：`--version`、`--help`、`dir`、`git` 均正常；`dir` 命中 Windows 专属文档，`git` 回退到 common 文档。
-- 用户在 `src`、`tests` 中执行 tasks 残留搜索，没有匹配结果。
-
-#### 已完成的知识库结构清理
-
-- `WenZoo1982/lcmd-kb` 的 `tasks/` 路径已从远程仓库删除，远程核验无残留。
-- 知识库清理提交：`4a41709f9210617ff982e307d2711ba732d2bcd6`，提交信息 `chore: remove unused tasks knowledge structure`。
-- 用户已执行 `git pull --ff-only origin main` 同步主程序总控文档和知识库仓库的远程变更。
-
-#### P4 最终搜索设计（已确认）
-
-- 唯一搜索来源：LCMD 自身 `commands/` 知识库；搜索离线运行，不读取用户系统的 man 手册。
-- 普通搜索：匹配命令文档名称和 `summary`。
-- `lcmd search <keyword> --full`：在普通搜索基础上，额外匹配 Markdown 正文。
-- `--full` 只扩大搜索范围，不显示完整文档、不改变结果格式。
-- 搜索结果始终只显示命令名称和摘要；用户选择后使用 `lcmd <command>` 查看完整文档。
-- 多关键词采用 OR 匹配；重复关键词去重；命中关键词越多排名越靠前；相关度相同时按命令名称排序。
-- 搜索不承诺语义理解，不引入中文分词、同义词库、人工任务映射或在线搜索。
-- man 手册仅作为知识库维护者编写、核对命令文档的参考资料，不参与用户运行时搜索。
-- 不恢复 `tasks/`，不实现 `lcmd task`；任务描述只是搜索关键词，结果仍为命令文档。
-
-#### P4.1 搜索核心（用户本地完成）
-
-- 新增 `src/lcmd/knowledge/search.py`，实现关键词规范化、普通/全文搜索、OR 匹配和相关度排序。
-- 新增 `tests/test_search.py`，12 项测试覆盖命令名称、summary、正文范围、OR 匹配、排序、大小写、重复关键词、空查询和返回类型。
-
-#### P4.2 CLI 接入（用户本地完成）
-
-- 修改 `src/lcmd/cli/app.py`，注册 `lcmd search <keyword>` 和 `--full`；搜索结果只输出命令名称与 summary；无结果时给出重试提示。
-- 修改 `tests/test_cli.py`，覆盖搜索输出、`--full` 参数传递、无结果提示和帮助列表。
-- 保留原有 `lcmd <command>` 查询行为，并隐藏内部查询命令。
-
-#### P4 本地验收记录（用户反馈）
-
-- 全量 pytest：132 passed。
-- `ruff check .`：All checks passed。
-- `ruff format --check .`：27 files already formatted。
-- 真实 CLI 验收：`lcmd --help` 列出 search 且隐藏内部查询命令；`lcmd dir`、`lcmd git` 正常显示完整文档；`lcmd search "dir"`、`lcmd search "git"` 命中并只显示名称和摘要；普通模式搜索 `Get-ChildItem` 未命中，添加 `--full` 后命中 `dir`，输出格式仍只包含名称和摘要。
-- 用户提供的 `git diff --check` 无错误；Git 状态显示 2 个已修改文件和 2 个新增文件。
-- 助手已审查 `src/lcmd/cli/app.py`、`tests/test_cli.py`、`src/lcmd/knowledge/search.py`、`tests/test_search.py` 的内容，未发现偏离已确认设计的问题。
-- 用户已提交并推送 P4.1/P4.2 代码：`e397732c5930b8edf1bb0be57266fa67b7faa65c`，提交信息 `feat: add offline command search`。
-- GitHub 提交记录核验：4 个文件，315 insertions、0 deletions；父提交为总控文档提交 `8fefe992cff6a517972a6aceffee273bfd9d8d87`。
-- 用户本地执行顺序：`git commit` 成功；`git pull --rebase origin main` 成功；`git push origin main` 成功，远程 `main` 从 `8fefe99` 更新至 `e397732`。
-
-#### P4 完成结论
-
-P4 已完成：搜索设计、核心实现、CLI 接入、自动化测试、静态检查和真实 CLI 验收均已通过；代码已推送至 GitHub `main`。普通搜索和 `--full` 的实际行为符合已确认设计。P4 不读取系统 man 手册，也不恢复 `tasks/` 或实现 `lcmd task`。
-
-#### P5 完成记录
-
-首发平台范围已收紧为 Windows x64、Linux AMD64。主程序支持平台列表仅包含 `windows`、`linux`；macOS 不受支持，配置中的 `macos` 值会被拒绝。知识库首发目录仅保留 `commands/common/`、`commands/windows/`、`commands/linux/`，远程 macOS 占位目录已删除并由用户本地同步。
-
-已实现并验收：
-- `lcmd platform`：查看当前知识平台；`lcmd platform <name>`：切换到 `windows` 或 `linux`。
-- `lcmd language`：查看当前知识语言；`lcmd language <name>`：切换到 `zh-CN` 或 `en-US`。
-- 成功切换后显示新值；重复设置当前值时提示已经是当前值。
-- 非法值明确报错并列出允许值；配置校验在保存前执行，非法值不会覆盖原配置。
-- `platform`、`language` 管理命令只读取/保存配置，不加载知识库；知识库路径失效时仍可查看和切换配置。
-- 保留既有平台专属优先、common 回退机制；未重构 Loader，也未修改知识库路径逻辑。
-
-本地验收结果（由用户在 Windows 11 环境执行并反馈）：
-- `tests/test_config.py -q`：27 passed。
-- `tests/test_cli.py -q`：29 passed。
-- `pytest -q`：148 passed。
-- `ruff check .`：All checks passed。
-- `ruff format --check .`：27 files already formatted。
-- 真实 CLI 验证 `platform`、`language` 查看/切换/重复设置；最终恢复原配置 `windows` + `en-US`。
-- 真实 CLI 验证非法平台 `macos` 和非法语言 `fr-FR` 被拒绝，原配置未受影响。
-- 将配置中的知识库路径临时设为不存在的目录后，`platform`、`language` 仍可正常执行；`search` 明确报告知识库根目录不存在。随后通过备份恢复配置，SHA256 与原备份完全一致，并删除临时备份。
-- `platform --help`、`language --help`、`search --help` 均能显示用途、参数和支持值；部分 Typer 帮助提示仍为英文。已确认后续采用分层帮助规范：主帮助列出所有已实现公开命令和全局选项；子命令帮助说明用途、参数、可选值并尽可能提供示例；新增功能同步更新帮助；隐藏内部命令不展示；未实现功能不提前展示。帮助系统完整中文化和示例完善作为后续统一改进，不阻塞 P5。
-
-P5 功能、自动化测试、静态检查、真实 CLI 验收及 GitHub 远程交付均已完成。用户本地提交 `5ead529`（`feat: add platform and language management`）已成功推送至 `main`；用户反馈推送后 `HEAD` 与 `origin/main` 均指向 `5ead529`，`git status --short` 无输出。下一阶段为 P6：知识库仓库与首批内容。
-
-### 文档同步状态
-
-- 主程序代码提交 `e27690535a832af024c67430b8f32133f5d01c48` 已推送到远程 `main`。
-- 知识库 `tasks/` 删除提交 `4a41709f9210617ff982e307d2711ba732d2bcd6` 已推送到远程 `main`。
-- P4 代码提交 `e397732c5930b8edf1bb0be57266fa67b7faa65c` 已推送到远程 `main`。
-- 本次 P5 总控文档更新与用户本地 P5 代码提交保持独立；用户需在本地执行 `git pull --ff-only origin main` 同步文档。
-- P5 代码提交 `5ead529` 已由用户推送至远程 `main`；推送后本地 `HEAD` 与 `origin/main` 一致，工作区干净（以用户本次终端输出为准）。
-- 文档提交与代码提交保持独立。
-
-
-
-### P6 当前进展：知识库结构、规范与首批内容计划已确认
-
-#### 知识库仓库远程状态（2026-11-02 核验）
-
-- 仓库：`WenZoo1982/lcmd-kb`，默认分支 `main`。
-- 远程最新提交：`6a85ecb`，提交信息 `chore: remove macOS placeholder knowledge directories`。
-- `manifest.json` 当前知识库版本为 `0.1.0`；目前没有 GitHub Release。
-- 根目录包含 `README.md`、`manifest.json` 和 `commands/`。
-- 当前远程目录结构：
-  
-      commands/
-      ├── common/
-      │   ├── zh-CN/
-      │   └── en-US/
-      ├── linux/
-      │   ├── zh-CN/
-      │   └── en-US/
-      └── windows/
-          ├── zh-CN/
-          └── en-US/
-
-- 当前远程只有 3 篇英文示例文档：`windows/en-US/dir.md`、`common/en-US/dir.md`、`common/en-US/git.md`；尚无正式中文命令文档或 Linux 专属命令文档。
-- 用户本地知识库仓库已核验：`HEAD` 与 `origin/main` 均为 `6a85ecb`，无需 pull。工作区有一个未跟踪文件 `commands/windows/zh-CN/lcmd-priority-test.md`，其内容是平台优先级测试标记（`WINDOWS_MARKER`），不是正式命令文档；当前建议保留在本地，不提交到公开知识库。该文件不改变远程状态。
-
-#### 已依据主程序实际代码确认的文档规则
-
-- Loader：只扫描当前平台/语言目录和对应 Common/语言目录的顶层 `*.md`，不递归；按文件名不区分大小写排序。
-- 命令标识取 Markdown 文件名（不含扩展名）；文件名即命令正式名称。
-- Parser：文件必须以独立的 `+++` 行开始 Front Matter，并以另一独立的 `+++` 行结束；Front Matter 使用 TOML；结束标记之后的正文原样保留。
-- Validator：当前只允许一个元数据字段 `summary`；它必须是非空字符串；Markdown 正文必须非空；未知字段会导致该篇文档校验失败。
-- 文档使用 UTF-8 Markdown + TOML Front Matter。当前程序不强制正文标题、章节顺序或示例数量；内容建设将另外遵循统一质量规范。
-- 单篇文档解析/校验失败会被隔离并记录诊断，不阻断其他有效文档。
-- 平台优先级以成功加载的文档名称为准：平台文档成功加载后优先；Common 仅补充平台没有成功加载的同名文档。若平台同名文档存在但解析/校验失败，当前 Loader 仍可能回退加载 Common 同名文档。这是已核对的现有行为，P6 内容建设阶段不擅自修改 Loader。
-
-#### 已确认的文档内容规范
-
-- 中文文档建议章节：用途、基本语法、常用参数、常用示例；按命令实际需要可省略不适用章节。
-- 英文文档使用对应章节：Purpose、Basic syntax、Common options、Common examples。
-- **内容以用户要完成的事情为中心，而不是以官方参数列表为中心。** 用户查阅文档时，应能快速回答“我想做什么、该用什么命令、如何直接使用”。
-- “常用参数”优先采用需求导向的组织方式，建议表格第一列使用“想要做什么”，再给出使用方式和通俗解释；不把参数名称和官方定义作为内容主体。
-- 参数解释使用日常、易理解的语言，说明实际效果和适用场景，避免照搬官方术语或帮助文档原文。
-- 示例应尽可能提供完整、可直接复制使用的命令；必要时补充路径、参数或前置条件，避免让初学者自行拼接。
-- 只收录高频、实用的功能，不以参数覆盖率或文档长度作为质量目标；低频参数不为追求完整而收录。
-- 文档同时服务于快速查找和初学者理解：熟悉命令的用户能快速定位用法，初学者也能理解命令的实际作用。
-- 对容易混淆、可能造成误操作或具有风险的操作，补充必要的技术说明和提醒；不为解释概念而堆砌无关背景。
-- 参数与示例必须准确。平台行为或语法有差异时分别编写平台专属文档；Common 只收录真正跨平台工具的通用知识。
-- Windows 首批文档以 Windows PowerShell 5.1 为主要教学环境，按 PowerShell 5.1 的实际命令、别名、cmdlet 和参数行为编写；不将 CMD/DOS 参数规则直接套用到 PowerShell。CMD 只在确有必要时补充常见兼容说明，不单独建设一套 CMD 教程。PowerShell 7 的新特性暂不纳入首发内容。
-- LCMD 只展示知识，不执行文档中的命令。
-- 当前 Validator 只校验 Front Matter 的 `summary` 和非空正文；上述章节与内容质量要求属于编辑规范，不应误称为程序已强制校验。
-
-#### 首批命令范围与内容建设顺序（用户已确认）
-
-首批暂定 22 个命令文档主题：
-
-| 分类 | 命令 | 用途 |
-|---|---|---|
-| Windows 专属 | `dir`、`cd`、`copy`、`move`、`del`、`mkdir`、`rmdir`、`ipconfig`、`ping`、`tasklist` | 文件/目录操作、网络诊断、进程查看 |
-| Linux 专属 | `ls`、`cd`、`cp`、`mv`、`rm`、`mkdir`、`rmdir`、`pwd`、`ip`、`ping` | 文件/目录操作、网络诊断、路径查看 |
-| Common | `git`、`ssh` | 跨平台版本控制与安全远程连接 |
-
-内容建设顺序已由用户确认：
-
-1. Windows `zh-CN`
-2. Linux `zh-CN`
-3. Windows `en-US`
-4. Linux `en-US`
-5. Common `zh-CN`
-6. Common `en-US`
-
-Common 必须保留两个语言目录：`commands/common/zh-CN/` 与 `commands/common/en-US/`。Loader 按当前语言回退，不允许跨语言回退。例如 Windows + `zh-CN` 只回退到 Common `zh-CN`，Windows + `en-US` 只回退到 Common `en-US`。
-
-以上是首批内容计划，不代表这些文档已经创建或验收。P6 后续先按上述顺序逐组编写、审查和验证，不一次性生成大批未审阅文档；必要的内容校验工具须在核对现有测试与实际 Schema 后再决定是否增加。
-
-## 13. 协作与状态更新规则
-
-- 一次聚焦一个明确任务；必要时一次只问一个关键问题。
-- 不擅自扩大范围，不重复已经确认的设计。
-- 不把建议、计划或远程文件存在描述成已实现。
-- 修改代码前检查 Git 状态和差异，不覆盖用户未提交的修改。
-- 开发总控文档由助手直接维护 GitHub 远程 LCMD-DEV.md；远程更新核验成功后，再指导用户将文档变更拉取到本地。用户不需要手动编辑总控文档或上传文档。
-- 代码仍在用户本地开发和测试；用户提供本地执行结果，助手据此更新远程总控文档。
-- 文档提交与代码提交分开处理；文档更新不得覆盖用户本地未提交的代码/测试修改。
-- 每个阶段完成后更新本总控文档、提交并推送，再核验远程结果。
-- 用户本地环境和文件状态必须通过用户提供的命令输出核实；远程 GitHub 状态不能代替本地状态。
-
-
-## 14. 知识库驱动的平台、语言与第三方工具通用架构（目标设计，尚未实现）
-
-本节是 P6 的正式目标架构。以下规则是待实现设计，不代表当前主程序或知识库已经支持。
-
-### 14.1 核心原则
-
-**主程序提供通用发现、加载、查询和校验机制；平台、语言、工具及命令内容由知识库目录提供。主程序不得硬编码具体平台、语言或第三方工具名称。**
-
-- 知识库目录采用两个顶层类别：`platforms/` 与 `tools/`。
-- `platforms/` 保存操作系统平台命令；`tools/` 保存第三方命令行工具知识。
-- 当前知识库只需包含首发实际提供的 Windows、Linux 及对应语言目录。无需预先创建 macOS、HarmonyOS 或其他未来平台的空目录。
-- 在通用机制实现后，新增平台、语言、工具或子命令，原则上只需按规范增加知识库目录和 Markdown 文档，不修改主程序。
-- “无需修改主程序”指知识库发现、配置切换、内容加载、查询和搜索能力已按通用规则实现。新增平台对应的安装包、系统集成、运行环境适配和实际系统测试仍可能需要单独开发。
-- LCMD 不检测系统是否安装文档中介绍的命令，也不执行命令。
-
-### 14.2 目标目录结构
+当前架构的知识库根目录至少包含：
 
 ```text
 lcmd-kb/
 ├── manifest.json
 └── commands/
     ├── platforms/
-    │   ├── windows/
-    │   │   ├── zh-CN/
-    │   │   └── en-US/
-    │   ├── linux/
-    │   │   ├── zh-CN/
-    │   │   └── en-US/
-    │   └── <future-platform>/
-    │       ├── zh-CN/
-    │       └── en-US/
+    │   ├── windows/<language>/*.md
+    │   ├── linux/<language>/*.md
+    │   └── <future-platform>/<language>/*.md
     └── tools/
-        ├── git/
-        │   ├── zh-CN/
-        │   │   ├── git.md
-        │   │   ├── init.md
-        │   │   ├── status.md
-        │   │   └── ...
-        │   └── en-US/
-        ├── docker/
-        │   ├── zh-CN/
-        │   │   ├── docker.md
-        │   │   ├── run.md
-        │   │   ├── build.md
-        │   │   └── ...
-        │   └── en-US/
-        └── ssh/
-            ├── zh-CN/
-            └── en-US/
+        ├── git/<language>/
+        ├── docker/<language>/
+        └── ssh/<language>/
 ```
 
-目录约定：
+路径语义：
 
-- 平台命令：`platforms/<platform>/<language>/<command>.md`。普通系统命令继续一条命令一篇文档。
-- 第三方工具：`tools/<tool>/<language>/`。工具入口文档统一使用当前工具自身名称命名，即 `<tool>.md`，例如 Git 使用 `git.md`、Docker 使用 `docker.md`。复杂工具在入口文档之外组织子命令详细页；简单或参数型工具可以只有这一篇综合速查文档。
-- `<tool>.md` 是由工具目录名确定的通用入口文件约定，不是按具体工具名称编写特例；Loader 根据当前工具目录名定位入口文档。
-- 工具子命令与平台命令采用相同的 CLI 参数解析方式：工具名之后的每个参数就是一个子命令路径段，不另设 Git/Docker 等工具专属语法。路径映射规则为：除最后一个子命令段外，前面的段依次作为目录；最后一个段作为同名 `.md` 文件。例如 `lcmd docker compose` 对应 `tools/docker/<language>/compose.md`，`lcmd docker compose up` 对应 `tools/docker/<language>/compose/up.md`；`lcmd git init` 对应 `tools/git/<language>/init.md`。若查询路径对应一个子命令目录但没有同名 Markdown 文档，则显示该目录下可用的下一级子命令列表。路径编码须安全、可移植且无歧义。
-- 平台标识、工具标识、子命令路径段及 Markdown 文件主文件名统一采用小写 ASCII slug：只允许 `a-z`、`0-9` 和连字符 `-`；必须以字母或数字开头和结尾，不允许空格、下划线、中文、斜杠或其他特殊字符。多个单词使用连字符连接，例如 `filter-branch`。此规则同样适用于平台命令文档的文件主文件名。
-- 语言目录名是语言标识，不使用上述 slug 规则；继续采用规范语言标签形式，例如 `zh-CN`、`en-US`，并按知识库实际目录动态发现，不硬编码允许值。
-- 知识库中的 slug 和文件名必须按小写规范存储。用户输入的工具名、平台命令名及子命令参数按大小写不敏感方式匹配，匹配前进行 ASCII 小写规范化；不允许通过大小写差异产生两个不同文档。
-- Markdown 文档扩展名统一为小写 `.md`。Windows 保留设备名（如 `CON`、`NUL`、`AUX`、`COM1` 至 `COM9`、`LPT1` 至 `LPT9`）不得作为任何目录名或文件主文件名，即使后面带有扩展名也必须拒绝。
-- Loader/Validator 必须拒绝不符合命名规则的目录和文档文件，并防止路径穿越、绝对路径、符号链接逃逸及解析后的实际路径越出对应知识库根目录。不同大小写或规范化后相同的名称视为冲突，不能静默覆盖或任意选择。
-- 工具知识默认对当前选择的所有平台可见。Common 旧目录不再作为第三种类别；旧 Common 文档迁移到 `tools/`。若未来确实需要平台专属工具说明，必须先设计通用覆盖规则，不能临时为单个工具添加特例。
+- 平台命令：`commands/platforms/<platform>/<language>/<command>.md`
+- 第三方工具：`commands/tools/<tool>/<language>/...`
+- 工具入口页使用工具目录同名文件，例如 `git.md`、`docker.md`，不是 `index.md`。
+- 工具子命令按相对路径组织。例如 `lcmd docker compose up` 对应 `tools/docker/<language>/compose/up.md`。
+- 工具内容在当前选择的平台下共享，但必须存在当前选择语言的对应工具文档；没有当前语言内容时不回退到其他语言。
+- 平台、工具和子命令由知识库目录动态发现，不在主程序中硬编码名称。
+- 平台命令与第三方工具可以同名；单参数查询可同时显示两类匹配结果。
 
-### 14.3 平台与语言动态发现及配置切换
+### 3.1 文档格式
 
-配置文件继续保存三个独立信息：
+每篇 Markdown 文档使用 UTF-8 编码和 TOML Front Matter：
 
-```toml
-path = "D:\\Project_DEV\\lcmd-kb"
-platform = "windows"
-language = "zh-CN"
-```
-
-- `path` 始终指向知识库根目录，不随平台或语言切换而改变。
-- `platform` 和 `language` 只保存用户当前选择的目录标识，不保存或拼接子目录路径。
-- 可用平台从 `commands/platforms/` 下实际存在且结构有效的平台目录动态发现。
-- 可用语言从所选平台实际存在的语言目录动态发现；工具内容也按当前语言读取。
-- `lcmd platform` 显示当前平台和知识库中发现的可用平台；`lcmd platform <name>` 切换到指定平台。
-- `lcmd language` 显示当前平台可用的语言和当前选择；`lcmd language <name>` 切换语言。
-- 目录发现阶段从实际目录和符合命名规则的 Markdown 文件发现平台及候选语言；切换前还必须尝试加载目标平台/语言，确认至少有一篇有效平台命令文档。只有验证成功才保存配置；失败时保留原配置，不改变 `path`。
-- 当目标平台没有当前语言时，必须明确提示该平台提供哪些语言；不得静默切换语言、平台或知识库路径。用户应先选择该平台实际提供的语言。
-- 主程序不得硬编码 `windows`、`linux`、`macos`、`harmonyos` 等平台清单，也不得硬编码 `zh-CN`、`en-US` 等固定语言允许值。
-- 知识库路径不可用时，`platform`、`language` 至少仍可查看当前配置值；无法读取知识库时应明确说明不能发现或验证可用值，不得伪造列表。是否允许在离线/路径失效状态下强制设置未验证值，P6 设计时明确，默认不得保存未经验证的值。
-
-示例：当前知识库只有 Windows 和 Linux 时，平台列表只显示这两个平台。未来加入 `commands/platforms/macos/zh-CN/` 后，主程序自动发现 macOS；加入 HarmonyOS 目录后也采用相同机制，无需为平台名称增加代码分支。
-
-### 14.4 工具导航、子命令与查询规则
-
-- `lcmd <tool>` 的工具入口按当前工具语言目录中的文档结构统一决定：
-  - 存在 `<tool>.md`：显示该工具入口/总览文档；其他文档作为子命令详细页。
-  - 不存在 `<tool>.md`，且只有一篇 Markdown 文档：直接显示该唯一文档，作为工具综合速查页。
-  - 不存在 `<tool>.md`，且有多篇 Markdown 文档：显示可用文档/子命令列表，不任意挑选其中一篇。
-  - 当前语言目录不存在或没有有效文档：明确提示，不静默切换语言，也不回退到其他语言。
-- 工具查询沿用与 Git 等命令行工具相同的参数结构：`lcmd <tool> <subcommand...>`；工具名之后的参数按顺序组成子命令路径，不为特定工具设计单独语法。
-- 路径映射：`lcmd git init` 对应 `tools/git/<language>/init.md`；`lcmd docker compose` 对应 `tools/docker/<language>/compose.md`；`lcmd docker compose up` 对应 `tools/docker/<language>/compose/up.md`。即最后一个子命令段映射为同名 Markdown 文件，前面的子命令段映射为目录。
-- 若查询路径对应的子命令目录存在、但没有对应的同名 Markdown 文档，则显示该目录下可用的下一级子命令列表。
-- 工具名称及子命令路径均由知识库目录/文档推导，不能在主程序中维护 Git、Docker 等名称或子命令清单。
-- 查询解析必须支持规范允许的多级子命令路径，并保证与主程序公开选项、`search`、`platform`、`language` 等 CLI 命令不产生不可控冲突。
-- 平台命令与第三方工具允许同名。执行简洁查询（如 lcmd git、lcmd ls）时，若平台命令和工具入口同时匹配，必须同时返回并展示，不要求用户使用额外的 command 或 tool 前缀，也不得静默覆盖其中一方。
-- 查询结果允许同时包含匹配文档和下一级子命令。若文档与同名目录同时存在，显示文档并同时列出该目录下的子命令。
-- 工具目录没有同名入口文档时，只有一篇有效 Markdown 文档则直接显示该文档；有多篇有效文档则显示可用文档/子命令列表。该规则同样适用于子命令路径，不任意挑选多篇文档中的一篇。
-- search、platform、language 等 LCMD 公开子命令及全局选项保留为 CLI 入口，不被知识库同名文档覆盖；其他名称按知识库内容查询。
-- 文档唯一 ID 直接采用相对于 `commands/` 根目录的规范化知识库路径，使用 `/` 作为逻辑分隔符，并保留 `.md` 扩展名；例如 `platforms/windows/zh-CN/dir.md`、`tools/git/zh-CN/init.md`、`tools/docker/zh-CN/compose/up.md`。该 ID 自然包含类别、平台或工具、语言及完整命令路径，不使用标题、summary 或用户输入生成 ID，也不依赖操作系统本地路径分隔符。
-
-### 14.5 Loader、Parser、Validator 与 Search 的通用要求
-
-#### Manifest 与目录发现
-
-- manifest.json 是知识库根目录必需文件，只负责提供知识库版本号；第一版严格只包含 version 一个字段，值采用 SemVer Major.Minor.Patch。不得在 manifest 中维护平台、语言、工具、命令、文档路径或数量清单；这些内容一律从 commands/ 实际目录和文档动态发现。主程序校验 manifest 的 JSON 格式、字段结构及版本兼容性；缺失或无效 manifest 属于知识库整体错误。
-- Loader 分为目录发现和内容加载两个步骤，但仍由同一个 loader.py 模块负责，不额外拆分 discovery 模块。
-- discover_catalog(root: Path) 读取并验证知识库根目录、manifest 和目录结构，动态发现平台、平台语言、工具及每个工具自己的语言。目录清单不保存 Markdown 正文。
-- 目录发现阶段只判断目录、文件路径和命名规则是否有效；不把文件存在等同于正文有效。平台语言切换必须进一步尝试加载目标语言，确认至少存在一篇有效的平台命令文档后才能保存配置。
-- 每个工具的语言独立发现。当前平台/语言加载时，工具若没有对应语言目录或没有有效文档，只跳过该工具；不得因此阻断平台命令和其他工具的加载，也不得静默回退到其他语言。
-- 当前平台/语言下没有任何有效平台命令文档时，本次知识加载失败；单篇文档损坏只隔离该文档。工具文档全部缺失或损坏，不影响有效平台命令继续使用。
-
-#### Markdown 文档格式与 Parser
-
-所有知识文档使用 UTF-8 Markdown + TOML Front Matter，正式格式如下：
-
-~~~markdown
+```markdown
 +++
-
-summary = "查看当前目录中的文件和子目录，并按名称、类型或时间筛选。"
-
+summary = "查看当前目录中的文件和子目录。"
 +++
-
 ---
 
 ## 用途
 
-列出当前目录或指定目录中的文件和子目录。
+查看当前目录中的内容。
+```
 
-## 常用示例
+当前代码实际校验：
 
-dir -File -Filter *.zip
+- 文档必须以独立行 `+++` 开始，并存在结束 `+++`。
+- Front Matter 必须是合法 TOML。
+- Front Matter 必须且只能包含一个字段：非空字符串 `summary`。
+- Front Matter 结束后的正文必须以第一条非空行 `---` 开始。
+- 分隔线之后的正文不能为空。
+- Parser 保留 Front Matter 结束标记之后的正文；Validator 不强制固定章节名称、章节顺序、参数数量或示例数量。
+- 单篇 Markdown 文档解析或校验失败时，该文档被跳过；其他有效文档仍可加载。
+- 当前 Loader 对文档文件名、目录名执行小写 ASCII slug 规则检查，并限制路径不得通过符号链接或解析后路径逃逸知识库根目录；同级大小写规范化冲突的目录/Markdown 文件会被隔离或拒绝。
 
-只列出当前目录中扩展名为 .zip 的文件。
-~~~
+内容编辑规范（作者规范，不是程序校验规则）：
 
-- 文件以独立的 +++ 行开始 Front Matter，并以另一独立的 +++ 行结束；Front Matter 使用 TOML。分隔符前后允许空行。
-- Front Matter 只允许且必须包含一个字段 summary，值必须是去除首尾空白后仍非空的字符串。不设置 title、type、aliases、keywords 或其他重复表达路径信息的字段。
-- Front Matter 结束后，正文必须以独立的 --- Markdown 分隔线开始；该分隔线属于正文，Parser 必须保留。
-- 正文使用 Markdown 二级标题组织章节，例如 ## 用途、## 基本语法、## 常用参数、## 常用示例、## 必要注意事项。这些章节为推荐结构，不要求每篇文档全部包含；可按实际内容增删或调整。
-- 正文不设置用于重复文档名称的一级标题。文档显示名称由知识库路径推导，不从 Markdown 正文提取，也不通过 Front Matter 的 title 维护。
-- Parser 只负责解析 TOML 和分离正文：完整保留 TOML 元数据供 Validator 检查，并保留 --- 分隔线及其后的 Markdown 正文。Parser 不负责路径、slug、文档类别或内容质量校验。
-- TOML 语法错误、Front Matter 分隔符缺失/不完整、正文分隔线缺失等无法解析的情况，视为单篇文档解析失败。
-- Parser 使用 Python 标准库 tomllib，不增加 TOML 第三方依赖。
+- 以用户要完成的事情为中心，说明“想做什么、用什么命令、如何使用”。
+- 只收录高频、实用参数；不为了完整而堆积冷门参数。
+- 示例应准确、尽可能完整并可复制；必要时说明前置条件。
+- 对容易混淆或可能造成误操作的用法补充必要提醒。
+- 文档应简短、通俗、易理解；不照搬官方手册长篇说明。
+- 可采用“用途、基本语法、常用参数、常用示例、必要注意事项”等章节，但程序不要求每篇文档必须具有全部这些章节。
 
-#### Validator
+## 4. 当前主程序实现
 
-- Validator 检查 Front Matter 是否只有且必须包含 summary，并验证其为非空字符串；未知字段、重复 TOML 键或非法类型均拒绝该文档。
-- Validator 检查正文分隔线和正文非空；不强制固定章节、示例数量或参数覆盖率，不因普通 Markdown 排版不够规范但仍可正常解析而拒绝文档。
-- Validator 根据 Loader 提供的相对路径上下文检查目录层级、slug、语言目录、扩展名、Windows 保留设备名、大小写/规范化冲突和路径安全。
-- 逻辑文档 ID 使用相对于 commands/ 根目录的 POSIX 路径，统一使用 / 分隔并保留 .md 扩展名；实际文件访问时再转换为当前系统的路径对象。
-- 在读取文件前必须完成路径安全检查：拒绝绝对路径、路径穿越、越界符号链接和解析后实际路径越出知识库根目录的情况；只读取知识库范围内的普通文件。
-- 文档类别、平台/工具标识、语言和命令路径均从目录结构推导，不使用 Front Matter 的 type 字段。
+### 4.1 技术栈与入口
 
-#### 统一数据模型
+依据当前 `pyproject.toml`：
 
-所有数据模型集中定义在 knowledge/models.py，采用冻结 dataclass 和 tuple 集合；不建立平台命令与工具文档的继承体系。
+- Python：`>=3.11`
+- 构建后端：setuptools
+- CLI：Typer
+- 终端表格/Markdown/Panel：Rich
+- 用户目录定位：platformdirs
+- TOML 读取：Python 标准库 `tomllib`
+- 测试：pytest
+- 静态检查与格式：Ruff
+- CLI 安装入口：`lcmd = lcmd.main:main`
+- 也支持：`python -m lcmd`
+- 当前项目版本：`0.1.0`
 
-- PlatformInfo(name, languages)：一个平台及其候选语言目录。
-- ToolInfo(name, languages)：一个第三方工具及其独立的候选语言目录。
-- KnowledgeCatalog(root, version, platforms, tools)：知识库根目录、manifest 版本、动态发现的平台和工具目录清单。
-- KnowledgeDocument(id, category, platform, tool, language, summary, body)：统一文档模型。平台文档的 platform 非空、tool 为空；工具文档相反。类别仅为 platforms 或 tools。
-- 文档 id 是相对于 commands/ 的规范化路径。显示名称由该路径推导，不重复保存 title、name 或 relative_path 字段。
-- KnowledgeBase(platform, language, documents)：当前选择范围内成功加载的文档集合，不重复持有完整 Catalog。
-- QueryResult(documents, children)：精确查询可同时返回匹配文档集合和下一级子命令名称集合；两者都为空表示未找到。
-- SearchResult(document, score)：搜索结果引用统一文档模型并保存相关度。
-- Parser 的中间模型 ParsedDocument(metadata, body) 保存完整 Front Matter 元数据和正文；Parser 不提前丢弃未知字段，Validator 校验通过后，Loader 才生成 KnowledgeDocument。
+当前源码结构：
 
-#### 模块边界与接口
-
-目标源码结构：
-
-~~~text
+```text
 src/lcmd/
-├── __init__.py
-├── __main__.py
-├── main.py
 ├── cli/
 │   └── app.py
 ├── core/
@@ -689,375 +145,290 @@ src/lcmd/
 │   ├── validator.py
 │   ├── query.py
 │   └── search.py
-└── output/
-    └── renderer.py
-~~~
+├── output/
+│   └── renderer.py
+├── __init__.py
+├── __main__.py
+└── main.py
+```
 
-- core/config.py：配置模型、读取、写入和原子保存；继续使用现有 [knowledge] 配置节及 path/platform/language 字段，不改变用户配置文件格式。
-- core/paths.py：只负责应用配置目录、数据目录和默认知识库路径定位，不扫描知识库内容。
-- knowledge/models.py：集中定义上述数据模型，不依赖项目其他模块。
-- knowledge/parser.py：parse_document(content: str) -> ParsedDocument；只解析 TOML 和正文。
-- knowledge/validator.py：提供文档相对路径校验和解析结果 Schema 校验；不依赖 CLI、Renderer 或 Loader。
-- knowledge/loader.py：discover_catalog(root: Path) -> KnowledgeCatalog；load_knowledge(catalog, platform, language) -> KnowledgeBase。负责目录发现、文件读取、Parser/Validator 协调和单篇错误隔离。
-- knowledge/query.py：query_document(knowledge, arguments) -> QueryResult；只在已加载的数据中进行精确查询，不读取文件系统。
-- knowledge/search.py：search_knowledge(knowledge, keyword, full=False) -> tuple[SearchResult, ...]；只在当前 KnowledgeBase 中搜索，不读取文件系统。
-- output/renderer.py：使用 Rich 显示文档、同名匹配结果、子命令列表和搜索结果；负责交互式分页，不执行查询、不读取文件。
-- cli/app.py：负责 Typer 命令入口、配置/知识库流程协调、参数处理和用户可见提示；不承载 Parser、Loader、Query 或 Search 的内部实现。
-- main.py 与 __main__.py 只负责程序入口。
+模块职责：
 
-依赖方向约束：Models 不依赖其他项目模块；Parser 和 Validator 不依赖 Loader/CLI；Loader 依赖 Models、Parser、Validator；Query/Search 只依赖 Models；Renderer 只依赖输出所需模型和 Rich；CLI 负责组合调用。不得产生循环依赖，不增加没有明确需求的 services、repositories、adapters、插件框架或注册表。
+| 模块 | 当前职责 |
+|---|---|
+| `cli/app.py` | Typer 应用、动态命令参数接管、初始化状态、search/platform/language 命令 |
+| `core/config.py` | AppConfig、TOML 配置读取/校验/原子保存 |
+| `core/paths.py` | platformdirs 用户配置目录、配置文件和默认知识库目录 |
+| `knowledge/models.py` | 平台、工具、目录、文档、查询及搜索数据模型 |
+| `knowledge/loader.py` | Manifest 校验、目录动态发现、路径安全检查、Markdown 文档加载 |
+| `knowledge/parser.py` | TOML Front Matter 解析并分离 Markdown 正文 |
+| `knowledge/validator.py` | Front Matter 与正文结构校验 |
+| `knowledge/query.py` | 平台命令、工具入口和多级子命令的精确查询 |
+| `knowledge/search.py` | 关键词拆分、字段匹配、相关度评分和排序 |
+| `output/renderer.py` | 文档 Panel、子命令列表、搜索结果表格及交互分页 |
+| `main.py` / `__main__.py` | 程序启动入口 |
 
-#### 精确查询与搜索
+### 4.2 当前 CLI 命令
 
-- 精确查询使用 lcmd <name> 和 lcmd <tool> <subcommand...>。用户输入不区分 ASCII 英文字母大小写，匹配前规范化；路径段必须符合 slug 规则，不允许用户参数直接构造任意文件路径。
-- 平台命令和工具入口同名时同时返回，不设置 AMBIGUOUS 状态，不增加 command、tool 前缀。
-- 查询文档和同名子命令目录可以同时存在；QueryResult 同时返回文档和 children。
-- 没有工具入口 <tool>.md 且只有一篇有效文档时直接显示该文档；有多篇时显示可用文档/子命令列表。
-- search、platform、language 和全局选项为 CLI 保留入口，优先由 CLI 处理；知识库文档不得覆盖这些入口。
-- Search 仅检索当前平台的系统命令和当前语言下存在有效文档的工具；不搜索其他平台或其他语言。
-- 普通搜索字段包括命令名称、工具名称、完整子命令路径、summary 和正文“用途”说明；--full 在普通搜索字段基础上增加常用参数、常用示例及其他正文。
-- 中文采用连续双字片段匹配，单字查询保留单字匹配能力；英文按单词边界切分并忽略大小写；中英文混合查询统一参与字面匹配。
-- 多关键词采用 OR 逻辑，任一关键词片段命中即可进入候选；按完整短语命中、命令/工具标识、字段权重及匹配覆盖度计算相关度。名称/完整子命令路径优先级最高，其次 summary，再其次用途；--full 扩展正文参与匹配。具体权重通过测试校准，不在规范中预设任意分值。
-- 不引入中文分词库、同义词库、语义搜索或在线搜索。搜索不承诺理解自然语言语义；不要求知识文档堆砌关键词、aliases 或 keywords。
-- 搜索结果显示文档名称、用途摘要及来源类别；平台命令显示平台来源，第三方工具显示工具来源。同名内容同时显示，不能相互覆盖。
-- 搜索结果默认每页 5 条；不超过 5 条直接显示。超过 5 条且处于交互式终端时才分页，按 Enter 查看下一页、按 Q 退出；非交互终端、管道或重定向直接输出全部结果。精确查询不进入搜索分页。
-- Search 负责匹配和排序；Renderer 负责显示和分页；CLI 负责调用两者。搜索排序相同的结果按文档唯一 ID 稳定排序。
-- 搜索规则沿用此前已确认的设计，不因新架构重建而引入额外字段或重新设计搜索功能。
+当前 CLI 真实提供：
 
-#### 错误边界
+| 调用 | 当前行为 |
+|---|---|
+| `lcmd --help` | 显示 Typer 帮助 |
+| `lcmd --version` / `-v` | 显示主程序版本及本地知识库版本；不加载文档、不写配置 |
+| `lcmd <command>` | 查询当前平台/语言的知识文档 |
+| `lcmd <tool>` | 显示工具入口页和可用子命令；无入口页时按单篇/多篇规则处理 |
+| `lcmd <tool> <subcommand...>` | 按路径查询工具子命令文档，支持多级路径 |
+| `lcmd search <keyword...>` | 按一个或多个关键词搜索 |
+| `lcmd search <keyword...> --full` | 在普通搜索字段基础上扩展到文档全文 |
+| `lcmd platform` | 显示当前平台及知识库发现的可用平台 |
+| `lcmd platform <name>` | 验证并切换平台，成功后持久化 |
+| `lcmd language` | 显示当前语言及当前平台提供的语言 |
+| `lcmd language <name>` | 验证并切换语言，成功后持久化 |
 
-- 知识库整体错误：知识库根目录不可用、manifest 缺失/无效、Major 不兼容、commands 根目录缺失等；由 Loader 以明确的整体错误向 CLI 传递，本次加载停止。
-- 单篇文档错误：文件无法读取、TOML 解析失败、Schema 不合规或路径不合规；Loader 隔离该文档，继续加载其他文档，不向普通用户展示内部路径、诊断报告或异常堆栈。
-- 当前平台/语言没有任何有效平台命令文档：本次加载失败；配置切换不保存目标值。
-- 个别工具没有当前语言或没有有效文档：跳过该工具，不回退到其他语言，不影响其他内容。
-- 普通查询没有匹配文档或子命令：显示“未找到相关命令或工具。”
-- 当前查询命中文档但确实无法正常显示：显示“知识内容暂时无法正常显示。”
-- 不引入日志框架、日志文件或面向普通用户的错误代码体系；内部异常只用于控制流程。
+当前**没有**以下命令/选项：
 
-#### 测试验收要求
+- 没有 `lcmd --update`。
+- 没有用户可调用的自定义知识库路径参数或管理命令。
+- 没有 `config` 子命令或 `--config` 全局选项。
+- 没有搜索分页参数；分页由搜索结果渲染器自动处理。
+- 没有系统命令执行、系统命令安装检测或在线搜索功能。
 
-- 目录发现：动态增加未知平台、未知语言、未知工具，无需修改主程序；平台语言与工具语言独立发现。
-- 文档解析/校验：TOML、未知字段、重复键、summary 类型/空值、缺失 Front Matter、缺失正文 ---、空正文、CRLF、UTF-8、Markdown 正文保留。
-- 路径安全：非法 slug、大小写冲突、保留设备名、绝对路径、路径穿越、符号链接逃逸、越界解析路径。
-- Loader：平台文档、工具入口、单篇综合文档、多级子命令；单篇损坏隔离；工具缺语言不影响其他工具；平台当前语言无有效命令时拒绝加载。
-- Query：大小写不敏感、平台命令与工具同名同时展示、文档与同名目录并存、单篇综合文档、多篇子命令列表、多级路径和未命中。
-- Search：沿用已确认的中文双字片段、单字、英文单词边界、中英文混合、OR、字段范围、相关度排序、稳定排序及 --full。
-- CLI/Renderer：配置切换成功/失败保护、同名文档来源标注、分页阈值、交互式与非交互式输出、普通用户提示。
-- 自动化测试通过不替代真实 CLI 验收；最终必须在 Windows 11 PowerShell 和 Linux Mint 环境完成真实 CLI 验收。
+### 4.3 动态命令解析与查询
 
-### 14.6 旧结构迁移与兼容性
+- Typer 使用自定义 `DynamicTyperGroup`。已注册的 `search`、`platform`、`language` 和以 `-` 开头的参数按 CLI 自身规则处理；其他未注册名称作为动态知识库查询参数。
+- 单参数查询同时匹配当前平台命令和同名第三方工具。
+- 平台命令按文件名精确匹配（查询参数大小写规范化为小写）。
+- 工具查询从当前语言工具文档集合中识别入口文件 `<tool>.md`。
+- 有入口文件时显示入口文档，同时从文件路径推导直接子命令。
+- 无入口文件且只有一篇有效文档时显示该文档。
+- 无入口文件且有多篇有效文档时显示文档列表/结果，不随意选择其中一篇。
+- 多级子命令路径由参数段映射到目录和最后一个同名 Markdown 文件；查询可以同时返回匹配文档和下级子命令。
+- 当前语言目录缺失时，不跨语言回退。
 
-- 旧结构为 `commands/common/<language>/`、`commands/windows/<language>/`、`commands/linux/<language>/`。
-- P6 采用一次性迁移到新结构，不要求主程序长期兼容旧目录。
-- 旧 Windows/Linux 文档分别迁移到 `commands/platforms/windows/<language>/` 和 `commands/platforms/linux/<language>/`。
-- 旧 Common 第三方工具文档迁移到对应的 `commands/tools/<tool>/<language>/`。例如旧 `common/zh-CN/git.md` 可迁移为 `tools/git/zh-CN/git.md` 工具入口/综合文档，具体内容结构按新规范审查，不机械复制成不符合新 Schema 的文件。
-- 迁移必须保留有效知识内容、语言隔离和必要的差异说明；迁移后检查旧目录无残留、文档无丢失、同名 ID 无冲突。
-- 旧平台优先/Common 回退逻辑由新类别模型取代：平台系统命令只在所选平台目录查询；第三方工具统一在 tools 目录查询，不再把平台命令和第三方工具混为同一命令命名空间。
-- Windows/Linux 既有文档内容、查询、搜索、语言隔离及 CLI 管理行为必须进行回归验收。
+### 4.4 知识库发现、加载与版本
 
-### 14.7 P6 实施与验收顺序
+- 知识库根目录必须有 `manifest.json` 和 `commands/platforms`。
+- Manifest 当前只允许 `version` 一个字段，采用三段式 SemVer 格式。
+- 当前主程序代码将支持的知识库 Major 固定为 `0`；Major 不为 `0` 时拒绝加载。Minor/Patch 不要求与主程序版本相等。
+- 平台目录、平台语言目录、工具目录、工具语言目录由实际文件系统动态发现。
+- 平台/工具目录和文档 slug 采用小写 ASCII 规则；语言目录按语言标签格式检查。
+- Loader 检查根目录、符号链接、路径解析后的根目录边界、目录名冲突和 Windows 保留设备名。
+- 平台命令文档从当前 platform/language 加载；第三方工具文档从各工具当前 language 加载。没有当前语言目录或没有有效文档的工具不会阻断平台命令加载。
+- 当前平台/语言没有有效平台命令文档时，`load_knowledge` 报错。
+- 单篇文档失败时隔离该文档，不使其他文档失效。
+- 当前代码未实现知识库版本的远程检查、下载或替换。
 
-1. **最小测试知识库（已完成初版）**：独立知识库仓库已搭建 `platforms/` 与 `tools/` 目录，并放入 Windows/Linux 平台命令、Git 导航与子命令、Docker 多级子命令及 SSH 单篇工具文档。样例用于验证目录与查询模型，不代表最终内容规范已冻结。
-2. **主程序审计（已完成）**：已检查远程主程序文件树、主要源码模块、CLI、测试文件和依赖，形成保留、重构、删除、新增建议。远程审计结论不代替用户本地 Git 工作区状态核验。
-3. **冻结新架构设计**：明确正式 Markdown 格式（TOML summary + 正文 `---` 分隔线 + Markdown 二级章节，不使用一级标题作为文档标题）、文档 Schema、唯一 ID、统一数据模型、目录及大小写规则、平台/工具独立语言发现、工具语言缺页策略、同名文档同时展示、文档与子目录并存、Query/Search 接口、模块职责与依赖方向、错误边界和测试验收契约。设计确认并写入本总控文档后，才开始清理旧实现。
-4. **清理旧主程序实现并建立新骨架**：在主程序仓库中删除旧的 `src/lcmd/` 实现和旧的 `tests/`，按冻结后的最终结构重新建立源码与测试。此操作只清理旧实现，不删除 Git 仓库、不重建仓库、不清除 Git 提交历史；`pyproject.toml`、README、`.gitignore`、`.gitattributes` 等根文件逐项审查，符合新项目要求的保留并修订，不适用的删除。README 按新架构重写。
-5. **实现平台/语言动态发现与配置切换**：使用临时新增的平台目录验证主程序无需代码改动即可发现并切换；验证目标平台缺少当前语言时的明确提示。保留必要配置行为，但不保留固定平台/语言枚举。
-6. **实现通用知识库核心**：实现 `platforms/` 与 `tools/` 的目录发现、加载、解析、校验、精确查询和搜索；不为 Git、Docker 或其他具体工具编写特例。
-7. **集成及真实 CLI 验收**：使用 Git、Docker、SSH 样例进行真实 CLI 验收；新增临时测试工具，只增加知识库文档、不修改主程序，验证扩展机制。自动化测试通过不能替代真实 CLI 验收。
-8. **迁移正式知识内容并回归**：按迁移规则转换旧 Windows/Linux/Common 正式内容，删除知识库旧目录和主程序旧兼容逻辑；检查文档无丢失、无重复 ID、无旧结构残留，完成全量测试、Ruff 和真实 CLI 回归。
-9. **冻结并扩充内容**：验收平台/语言发现、配置切换、工具导航、多级子命令、搜索唯一性、迁移完整性及离线行为；通过后冻结 Schema 和目录规范，再批量建设其他命令内容。
+### 4.5 搜索与分页
 
-**重建范围说明：** P6 采用“清理旧实现、按新架构重建”的路线，不以旧代码复用率为目标，也不在旧架构上逐步叠加新架构。经过审查且确实适合新架构的基础实现可以重新采用，但必须以新架构职责为依据；不得为了保留旧代码而保留旧模块、旧测试或兼容分支。清理源码和测试不等于删除 Git 仓库或提交历史。
+普通搜索字段及权重（当前 `search.py` 实现）：
 
-**最终目标：主程序完成这次通用架构实现后，未来增加 macOS、HarmonyOS、新语言、Git 以外的新工具或工具子命令，只需按规范扩展知识库；不因这些名称或内容新增而修改主程序。** 这不等于自动获得新操作系统的安装包、系统集成或实际运行适配。
+| 字段 | 权重 |
+|---|---:|
+| 文档名称、工具名及完整子命令路径 | 10 |
+| Front Matter `summary` | 6 |
+| 正文中的“用途”章节 | 3 |
 
-### 14.8 新架构洁净度与旧代码清理（强制约束）
+- 中文查询会拆分为连续双字片段，并保留完整中文片段；单个汉字作为一个片段。
+- 英文按单词 token 处理，匹配使用单词边界。
+- 完整关键词命中会增加额外分数；多关键词覆盖率也会增加分数。
+- `--full` 在上述字段基础上加入全文正文，权重为 1。
+- 结果按分数降序排列；同分时按文档 ID 排序。
+- 搜索范围是当前已加载知识库，即当前平台命令和当前语言可用的工具文档。
+- 分页由 `render_search_results()` 实现，默认每页 5 条。
+- 结果不超过 5 条时一次显示；超过 5 条时，只有在 Rich Console 为终端且标准输入为交互终端时才启用交互分页。
+- 分页提示为“按 Enter 查看下一页，按 Q 退出”；Enter 显示下一页，Q 退出。最后一页显示后自动结束。
+- 非交互终端中即使结果超过 5 条，也一次性输出，不等待输入。
+- 分页不是 search 命令参数，不存在 `--page` 或 `--size`。
 
-P6 不以“在旧程序上增加新功能”为完成标准，而以形成职责清晰、无历史包袱的新架构为标准。不得为了复用旧代码而保留不适合新架构的实现。
+## 5. 当前配置与路径实现（不是未来设计）
 
-强制原则：
+### 5.1 配置数据结构
 
-1. **不保留已废弃功能**：永久取消的功能不得以隐藏入口、备用实现、兼容分支或配置选项的形式继续存在。
-2. **不保留无用代码**：旧常量、旧数据模型、旧函数、旧分支、重复实现、无调用代码，以及只为旧架构服务的抽象，在确认无新架构用途后删除。
-3. **不保留无用文件或模块**：现有文件名和目录结构不是必须继承的约束。模块可按新职责重命名、合并、拆分或删除；不得仅因旧项目存在某文件，就在新架构中保留它。
-4. **不保留旧架构兼容层**：完成一次性知识库迁移后，删除旧目录扫描、Common 回退、固定平台/语言清单及其他旧模型专属逻辑，不提供长期双格式兼容。
-5. **不保留过时测试**：删除只验证废弃行为的测试；将仍有价值的产品行为重新表达为新架构测试。测试数量不是目标，覆盖正确行为和边界才是目标。
-6. **避免过度设计**：不引入没有明确需求的抽象层、插件机制、注册表或间接调用。每个模块必须有清晰、独立且必要的职责。
-7. **保留经过审查的有效基础**：现有实现只有在符合新架构职责、依赖边界和质量要求时才可保留；配置读写、原子保存、解析、错误隔离、终端渲染等能力也必须逐项审查，不得默认保留或默认重写。
-8. **仓库最终状态必须可解释**：源码、测试、依赖、文档和构建配置均应服务于当前产品目标；删除不再使用的依赖、脚本、配置和文档，不留下“以后可能用到”的死代码。
+当前 `AppConfig`：
 
-实施要求：
+- `knowledge_path: Path | None`
+- `platform: str = "windows"`
+- `language: str = "zh-CN"`
 
-- 编码前先审查当前仓库完整文件树、模块导入关系、公开 CLI、测试覆盖和依赖使用情况，形成“保留 / 重构 / 删除 / 新增”清单。
-- 先设计并确认新架构的最终模块边界与依赖方向，再开始改动源码；不能先复制旧目录再逐步打补丁。
-- 每次重构后运行对应测试、全量测试和 Ruff；最终检查无未使用代码、无旧架构标识、无无效依赖，并完成真实 CLI 验收。
-- 不要求沿用当前文件命名。最终文件树由职责设计决定，允许与旧结构明显不同。
-- 不以保留历史测试通过率为目标；以新架构的行为契约、回归覆盖、可维护性和开源协作可读性为验收标准。
+配置文件由 platformdirs 定位：
 
-**P6 的洁净度验收条件：新主程序中不存在已弃用功能、旧架构兼容代码、无用模块、死代码、无效依赖或只服务于旧实现的测试。任何保留的模块和测试都必须能说明其在当前架构中的必要职责。**
-以上为 P6 目标设计与执行约束，尚未实现。
+- 配置目录：`user_config_path("lcmd", appauthor=False)`
+- 配置文件：配置目录下的 `config.toml`
+- 默认知识库目录：`user_data_path("lcmd", appauthor=False) / "knowledge"`
 
-### 14.9 P6 主程序清理与重建决策（已确认）
+当前配置文件结构严格为：
 
-用户已确认采用一次性清理旧主程序实现、按新架构重建的路线：
+```toml
+[knowledge]
+path = "D:/path/to/lcmd-kb"
+platform = "windows"
+language = "zh-CN"
+```
 
-- 删除旧 `src/lcmd/` 源码实现和旧 `tests/`，按最终冻结的模块结构与新行为契约重新建立；不保留双架构并存状态。
-- 不为提高代码复用率而迁就旧实现。Parser、配置读写、原子保存、终端渲染等代码只有经过审查、确认适合新架构后才可复用；否则重新实现或删除。
-- 清理的是旧代码、旧测试和无用配置，不是 Git 仓库本身。保留 Git 提交历史，不删除或重建 GitHub 仓库。
-- 根目录文件逐项审查：保留并修订新架构仍需要的项目配置；重写 README；删除不再使用的文件、依赖和脚本。
-- 不在设计尚未冻结时立即清空源码。必须先完成第 14.7 节第 3 步列出的 Schema、数据模型、路径规则、查询行为、模块边界和依赖方向，再执行清理。
-- 清理前核对用户本地 Git 状态，确保未提交的用户修改不会被覆盖；如有未提交修改，先明确处理方式。
-- 重建后只维护一套当前架构、一套对应测试和本总控文档，不保留旧架构兼容层。
+注意：当前 `load_config()` 要求 `[knowledge]` 必须且只能包含 `path`、`platform`、`language` 三个字段；配置文件中不能省略 `path`。当配置文件不存在时，程序以默认知识库路径和默认 platform/language 初始化；成功加载知识库后保存初始配置。
 
-此决策是 P6 的正式执行约束，实际清理与重建尚未开始。
+### 5.2 当前初始化和切换行为
 
-### 14.10 P6 新架构接口与数据模型冻结补充（设计已确认，尚未实现）
+- `initialize_state()` 读取现有配置；若配置文件不存在，则使用默认路径、默认平台和默认语言。
+- 如果配置文件存在但配置内容无效，初始化会抛出配置错误；CLI 显示初始化失败。
+- 若知识库目录或当前平台/语言加载失败，初始化返回知识库不可用状态，不会自动切换到其他语言或知识库路径。
+- 只有知识库成功加载且配置文件原本不存在时，才写入初始配置。
+- `platform` / `language` 切换先尝试加载目标知识库状态，成功后保存配置；失败时保留原配置。
+- 切换 platform/language 时保留现有知识库路径。
+- `--version` 单独读取配置和 Manifest 版本，不加载 Markdown 文档，也不创建或写入配置。
 
-本节补充 14.5 的可执行数据模型和模块契约。若历史章节中的旧实现描述与本节目标设计冲突，以 14.5、14.10 的新架构契约为准；历史阶段记录只用于说明当时的实现状态，不代表新架构仍保留旧行为。
+### 5.3 当前未实现的路径能力
 
-#### 数据模型
+- 当前没有 CLI 命令或选项让用户指定、查看或修改知识库路径。
+- `AppConfig.knowledge_path` 和配置文件中的 `path` 已存在，内部配置机制能够保存自定义路径；但这不等于用户已有受支持的 CLI 配置入口。
+- 当前没有安装器负责把知识库部署到默认数据目录。
+- 当前没有知识库更新器、备份机制、用户自定义文档迁移或回滚机制。
+- 不要把手动编辑配置文件描述为已完成的产品化路径管理功能。
 
-~~~python
-@dataclass(frozen=True, slots=True)
-class PlatformInfo:
-    name: str
-    languages: tuple[str, ...]
+## 6. 当前已完成测试与验收
 
-@dataclass(frozen=True, slots=True)
-class ToolInfo:
-    name: str
-    languages: tuple[str, ...]
+以下结果来自本轮用户实际执行的命令输出、此前 Linux VM 测试记录及 GitHub 同步记录。测试结果是该次验收证据，不代表未来任何代码修改后自动继续有效。
 
-@dataclass(frozen=True, slots=True)
-class KnowledgeCatalog:
-    root: Path
-    version: str
-    platforms: tuple[PlatformInfo, ...]
-    tools: tuple[ToolInfo, ...]
+### 6.1 Linux Mint 22.3 自动化检查
 
-@dataclass(frozen=True, slots=True)
-class KnowledgeDocument:
-    id: str
-    category: Literal["platforms", "tools"]
-    platform: str | None
-    tool: str | None
-    language: str
-    summary: str
-    body: str
+主程序仓库在 Linux VM 中执行：
 
-@dataclass(frozen=True, slots=True)
-class KnowledgeBase:
-    platform: str
-    language: str
-    documents: tuple[KnowledgeDocument, ...]
+```bash
+.venv/bin/python -m pytest -q
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+```
 
-@dataclass(frozen=True, slots=True)
-class QueryResult:
-    documents: tuple[KnowledgeDocument, ...]
-    children: tuple[str, ...]
+结果：
 
-@dataclass(frozen=True, slots=True)
-class SearchResult:
-    document: KnowledgeDocument
-    score: float
-~~~
+- pytest：187 passed
+- Ruff lint：All checks passed
+- Ruff format：28 files already formatted
 
-- 所有数据类使用 frozen=True, slots=True；集合使用 tuple，避免向调用方暴露可变列表。
-- KnowledgeCatalog.root 是知识库根目录；文档 ID 相对于 root/commands/，因此 Loader 可通过受控根目录与 ID 定位文件。
-- KnowledgeDocument.category 仅为固定类别 platforms 或 tools；平台名称、工具名称和语言均为动态字符串，不使用平台/工具/语言 Literal 枚举。
-- KnowledgeDocument.platform 与 tool 必须且只能有一个非空。显示名称由 ID 路径推导为只读属性，不保存重复的 name 或 title 字段。
-- 平台命令显示名称为文件主文件名；工具入口 <tool>.md 显示工具名；工具子命令名称由工具名与相对语言目录的子命令路径组成。
-- KnowledgeBase 不重复持有 Catalog；CLI 分别持有 Catalog 和当前 KnowledgeBase。Catalog 用于发现与配置管理，KnowledgeBase 用于查询和搜索。
-- QueryResult.documents 可同时包含平台命令和工具的同名文档；children 可与 documents 同时非空。两者都为空表示未找到。
-- ParsedDocument 是 Parser 的中间结果，包含完整 TOML 元数据映射和正文；Parser 不提前丢弃未知字段，Validator 校验通过后 Loader 才生成 KnowledgeDocument。
+当时主程序与知识库均与对应 `origin/main` 同步，工作区干净。Linux 主程序同步到提交 `d2b40a5`，知识库提交为 `4ad7071`。
 
-#### 配置模型与接口
+### 6.2 Windows 11 本轮真实 CLI 验收
 
-- 配置文件保持现有 [knowledge] TOML 节和 path、platform、language 三个字段，不改变用户配置格式。
-- 配置数据模型对应 AppConfig(path, platform, language)；path 指向知识库根目录，平台和语言只保存标识。
-- core/config.py 提供配置读取和原子保存；core/paths.py 提供应用配置目录、数据目录和默认知识库路径。
-- discover_catalog(root: Path) -> KnowledgeCatalog 负责整体知识库检查和全局目录发现，不解析所有 Markdown 正文。
-- load_knowledge(catalog, platform, language) -> KnowledgeBase 负责加载指定平台/语言下的有效平台命令，以及具有对应语言内容的工具文档。
-- query_document(knowledge, arguments) -> QueryResult 只查询内存中的已加载文档。
-- search_knowledge(knowledge, keyword, full=False) -> tuple[SearchResult, ...] 只搜索内存中的已加载文档。
-- parse_document(content: str) -> ParsedDocument 负责 TOML Front Matter 和 Markdown 正文分离。
-- Validator 分别校验相对文档路径和 ParsedDocument Schema；Loader 负责调用顺序和单篇错误隔离。
+测试入口：在 `D:\Project_DEV\lcmd` 使用项目虚拟环境运行：
 
-#### 语言发现与加载边界
+```powershell
+.\.venv\Scripts\python.exe -m lcmd
+```
 
-- Catalog 中的平台语言是目录发现阶段找到的候选语言；工具语言是每个工具独立发现的候选语言。
-- 候选语言目录必须存在，并包含至少一篇路径/文件名符合规范的 Markdown 文件。
-- 目录发现不解析正文；因此候选目录不等于最终有效内容。切换平台或语言时必须尝试加载目标平台语言，确认至少一篇有效平台命令文档后才保存配置。
-- 加载当前平台/语言时，平台文档逐篇解析和校验；有效文档进入 KnowledgeBase，单篇失败跳过。
-- 当前平台/语言没有任何有效平台命令文档时，加载失败，原配置不变。
-- 工具按各自语言目录独立加载；工具缺少当前语言或其文档全部无效时跳过该工具，不进行跨语言回退，不阻断平台命令和其他工具。
-- 配置路径不可用时仍可读取和显示已保存的配置值，但不能伪造可用平台/语言清单，也不能保存未经验证的新选择。
+本轮确认结果：
 
-#### 异常策略
+| 测试项 | 实际结果 |
+|---|---|
+| `--version` | 显示 LCMD 0.1.0、知识库 0.1.0 |
+| 默认知识库 | Windows 中文 `dir` 文档可正常加载；`ls` 未命中是因为测试知识库没有对应 Windows 文档，不是程序缺陷 |
+| 平台切换 | Windows 切换到 Linux 成功；Linux `ls` 文档正常显示 |
+| 功能搜索 | `search "当前目录"` 返回 5 条结果，包含平台命令和第三方工具文档 |
+| 全文搜索 | `search --full "隐藏文件"` 返回结果，`ls` 排序靠前；与普通搜索结果排序存在差异 |
+| 平台持久化 | 关闭并重新打开 PowerShell 后，当前平台仍为 Linux |
+| 语言读取/切换 | 当前语言可读取为 zh-CN；切换到 en-US 成功 |
+| 英文文档 | Linux `ls` 英文文档的章节、表格和示例正常渲染 |
+| Git 工具入口 | `lcmd git` 显示 Git 导航页及 `init` 子命令 |
+| Git 子命令 | `lcmd git init` 正常显示英文文档 |
+| Docker 工具入口 | en-US 下没有 Docker 文档，查询未命中；切换 zh-CN 后入口正常显示 `run`、`compose` |
+| Docker 子命令 | `lcmd docker run` 正常显示；`lcmd docker compose up` 正常显示三级路径文档 |
+| 搜索分页 | 使用 `search "的" --full` 得到 6 条结果；第一页显示 1–5，第二页显示 6；Enter 翻页正常，最后一页结束正常 |
 
-- 只建立必要的整体知识库错误边界；manifest、根目录、commands 根目录或版本兼容性错误导致本次加载失败。
-- 单篇文档解析/校验错误在 Loader 内部捕获并隔离，不中止其他文档加载。
-- 不为每一种文件错误建立复杂的异常继承树，不输出诊断报告、日志文件或异常堆栈给普通用户。
-- CLI 将整体错误和查询未命中分别转换为已确认的用户提示；不能把整体知识库错误伪装成未找到命令。
+关于 Docker 的语言行为：当前知识库只有 Docker `zh-CN` 文档；当前语言为 `en-US` 时不回退到中文，返回未找到；切换到 `zh-CN` 后正常显示。这是当前设计预期，不是故障。
 
-#### 模块依赖
+分页实测时第一页提示“按 Enter 查看下一页，按 Q 退出”；本轮实际观察到 Enter 进入第二页并正确显示第 6 条。Q 退出分支由代码实现，但本轮记录不把它标记为本轮实际按键验收。
 
-~~~text
-cli/app.py
-├── core/config.py
-├── core/paths.py
-├── knowledge/loader.py
-│   ├── knowledge/models.py
-│   ├── knowledge/parser.py
-│   └── knowledge/validator.py
-├── knowledge/query.py
-├── knowledge/search.py
-└── output/renderer.py
-~~~
+### 6.3 本轮未单独复测的内容
 
-- Models 不依赖项目其他模块。
-- Parser、Validator 不依赖 Loader、CLI、Renderer。
-- Loader 依赖 Models、Parser、Validator。
-- Query、Search 只依赖 Models。
-- Renderer 负责显示和分页，不访问知识库文件系统，不计算搜索相关度。
-- CLI 是流程协调入口；不在 CLI 内重复实现加载、解析、查询或搜索。
-- 不增加没有明确产品需求的中间层、插件框架、注册表或兼容层。
-
-#### 冻结状态
-
-本节与 14.5 合并后，作为 P6 主程序重建的目标接口和行为契约。尚未代表代码实现或验收完成。开始清理旧源码前，仍须由用户在本地核对 Git 工作区状态；旧实现和旧测试只在该检查通过后一次性清理。
-
-
+本轮 Windows CLI 测试没有重新执行 pytest/Ruff；自动化检查记录来自此前 Linux VM 的 187 项测试和静态检查。后续若修改程序代码，必须重新执行相关自动化测试。配置文件损坏、无效路径、manifest 错误、符号链接攻击等边界场景有自动化测试覆盖，但本轮没有逐项进行人工破坏性测试。
 
 ---
 
-## 15. P6 主程序重建与 Windows 端验收状态（2026-11-03）
+## 7. 当前仓库与同步基线
 
-本节为当前实际进度记录；若前文历史计划或“尚未实现/尚未开始”的描述与本节冲突，以本节状态为准。P6 的 Linux Mint 跨平台验收仍未完成，因此当前不标记整个 P6 阶段最终关闭。
+截至 2026-11-03，本轮 GitHub 主程序仓库核验：
 
-### 15.1 主程序提交
+- 默认分支：`main`
+- 当前最新提交：`d2b40a51dc53acf988479145df9407c40aecc5f2`
+- 该提交为 P6 跨平台验收文档收尾提交。
+- P6 功能代码提交：`acd04675f74f3f303f7a5e464553a48250940c05`。
+- 本轮 Windows 用户已将主程序同步到 `d2b40a5`；知识库同步到 `4ad7071`，用户终端显示两个仓库均与 `origin/main` 同步且工作区干净。
+- Linux VM 主程序和知识库也已同步至相同对应提交并完成自动化测试。
 
-- 主程序仓库：`WenZoo1982/lcmd`
-- 分支：`main`
-- P6 实现提交：`acd0467`
-- 提交说明：`feat: complete P6 knowledge architecture and CLI integration`
-- 已成功推送 GitHub：`5126a20..acd0467 main -> main`
-- 推送前本地工作区干净；提交包含 29 个文件，新增 3319 行、删除 1970 行。
-- 旧 `knowledge/lookup.py` 与 `tests/test_lookup.py` 已删除；新 `knowledge/models.py`、`knowledge/query.py` 及其测试已加入。
-- 本次提交没有包含临时配置、测试知识库或备份文件。
+以上本地状态以用户提供的终端输出为证；远程 GitHub 状态以远程仓库核验为证。今后开始新工作时仍需重新检查，不可直接假定本地没有新改动。
 
-### 15.2 自动化与静态检查
+---
 
-Windows 11 开发环境最近一次验收结果：
+## 8. 当前阶段结论与后续工作状态
 
-| 检查 | 结果 |
+### 已完成：P6 主程序与知识库通用架构
+
+P6 已完成的目标：
+
+- 主程序和知识库分离为独立仓库。
+- 知识库按 `platforms/` 与 `tools/` 两类组织。
+- 平台、语言、工具目录动态发现。
+- 当前语言加载，不跨语言静默回退。
+- 通用工具入口、单篇综合文档、多级子命令查询。
+- 功能关键词搜索、全文搜索、相关度排序。
+- 搜索结果超过每页 5 条时支持交互分页。
+- Windows 与 Linux Mint 22.3 环境完成自动化/静态检查及实际 CLI 验收。
+
+### 尚未进入实现：安装、更新和面向用户的知识库路径管理
+
+当前先不预设技术方案，也不把旧总控文档中的草案直接视为最终决定。后续讨论应分别从当前代码能力出发，明确需求、用户体验、文件布局、失败处理和兼容性，再确定是否及如何修改代码。
+
+讨论主题至少包括：
+
+1. **安装与首次初始化**：主程序和知识库如何交付、安装、放置；首次启动如何建立可用状态。
+2. **更新**：主程序与知识库各自独立版本的更新关系、检查方式、下载校验、用户确认、替换失败恢复。
+3. **自定义知识库路径**：用户如何查看、设置、修改路径；路径无效时如何提示；切换路径时如何保证现有数据和配置安全。
+
+这些主题目前都属于待讨论/待设计事项。没有确定前，不新增 CLI 参数、不改配置 Schema、不实现更新或安装流程。
+
+---
+
+## 9. 下一阶段推进规则
+
+- 一次只推进一个关键设计问题；先确认需求和行为，再讨论实现方式。
+- 设计必须以当前代码为起点：说明哪些能力已存在、哪些能力缺失、哪些模块需要变化。
+- 不因为历史文档里出现过某个方案，就默认用户已经批准该方案。
+- 先完成安装、更新、自定义知识库路径的整体关系讨论，再决定实施顺序和阶段拆分。
+- 用户确认方案后，更新本总控文档中的“已确认设计”；实现完成并测试后，再标记为“已实现/已验收”。
+- 修改代码前先检查 Git 状态和 diff；不覆盖用户本地未提交修改。
+- 不擅自提交代码，不提前生成安装包或更新器。
+- 本轮总控文档更新与程序代码变更保持分离。
+
+## 10. 固定协作与验收规则
+
+- 一次聚焦一个明确任务；必要时一次只问一个关键问题。
+- 不擅自扩大范围，不重复已经确认的设计，不用大量无关诊断代替目标排查。
+- 以实际源码、用户终端输出和远程仓库状态为证据；不假装访问用户本地文件。
+- 计划、建议、自动化测试结果、人工 CLI 实测结果分别记录，不混为一谈。
+- 功能代码变更至少执行相关定向测试、全量 pytest、Ruff lint 和 Ruff format；涉及 CLI、配置或路径时增加真实运行验证。
+- 代码提交与总控文档提交分开。
+- 总控文档由助手维护 GitHub 远程 `LCMD-DEV.md`；远程更新完成后，再由用户在本地执行 fast-forward pull 同步。
+- 每次文档更新后核对提交结果；用户本地环境状态仍以用户提供的命令输出为准。
+
+---
+
+## 11. 关键实现事实速查
+
+| 项目 | 当前事实 |
 |---|---|
-| 全量 pytest | 187 passed |
-| Ruff lint | All checks passed |
-| Ruff format | 28 files already formatted |
-
-自动化测试与真实 CLI 验收分别执行，不以测试通过替代实际命令运行。
-
-### 15.3 真实知识库与 CLI 集成验收
-
-- 真实知识库版本 `0.1.0`；Windows/Linux 与 `zh-CN`/`en-US` 四种平台语言组合均成功加载。
-- 固定 CLI 入口：帮助、无参数帮助、版本、platform、language、search 均已验证。
-- 动态精确查询：平台命令、工具入口、工具子命令、多级子命令、大小写不敏感和未命中提示均已验证。
-- 搜索：中文/英文、多关键词 OR、`--full`、交互式分页和非交互式管道输出均已验证。
-- 平台与语言切换成功；非法平台/语言切换失败后原配置保持不变。
-- 知识库不可用时的降级行为已真实验证：platform/language 仍显示已保存配置；search 和动态查询返回明确错误；version 显示知识库不可用；原配置通过 SHA256 校验完整恢复。
-- 使用隔离临时知识库通过 3 项特殊 CLI 集成场景：平台命令与同名工具同时显示、同名文档与子目录并存、多级子命令查询。临时测试文件自动清理。
-- 正式知识库中的 Docker 目录结构已验证入口、run、compose/up 和无入口子目录导航行为。
-
-### 15.4 P6 当前结论
-
-<badge>Windows 端通过</badge>
-
-P6 新架构实现、自动化测试、静态检查、真实知识库集成及 Windows 端 CLI 验收已完成。尚未完成的是 Linux Mint 22.3 环境的跨平台验收；因此 P6 阶段整体仍处于待 Linux 验收状态，不提前宣告最终关闭。
-
-### 15.5 下一阶段：Linux Mint 22.3 跨平台验收
-
-在 Linux Mint 22.3 x86_64 虚拟机中，从 GitHub 拉取主程序与知识库，使用独立虚拟环境安装和测试。按单步方式推进，不假设 Linux 测试机已经 clone 仓库或安装所需工具。
-
-验收顺序：
-
-1. 确认 Linux Mint 版本、架构和 Python 版本（项目最低 Python 3.11）。
-2. 从 GitHub 拉取主程序 `WenZoo1982/lcmd`，确认代码包含提交 `acd0467`。
-3. 拉取知识库 `WenZoo1982/lcmd-kb`，配置 Linux 下的知识库根目录；不得复用 Windows 绝对路径。
-4. 创建 Linux 虚拟环境并安装项目开发依赖。
-5. 执行全量 pytest、Ruff lint 和 format。
-6. 真实 CLI 验收：帮助、版本、platform/language、中文文档显示、工具入口/多级子命令、中文搜索、分页、平台/语言切换、未命中与知识库不可用降级。
-7. 重点检查 Linux 文件系统大小写行为、路径安全、UTF-8 中文输出和终端交互差异。
-8. 记录结果并修复跨平台问题；完成后再复核 Git 差异并决定 P6 最终收尾。
-
-**当前下一步仅执行 Linux Mint 测试机环境确认，不提前进行安装或修改。**
-
-
-### 15.6 Linux Mint 22.3 跨平台验收与知识库修复（2026-11-03）
-
-本节记录 Linux Mint 22.3 实际验收结果，并覆盖 15.5 中“Linux 验收尚未完成”的历史状态。主程序无需因本轮验收重新提交。
-
-#### Linux 环境与主程序
-
-- Linux Mint 22.3 虚拟机，架构 x86_64，Python 3.12.3，符合项目最低 Python 3.11 要求。
-- 主程序从 GitHub 克隆，包含 P6 主程序提交 `acd0467`；在独立 `.venv` 中安装开发依赖。
-- Linux 全量自动化测试：187 passed。
-- Ruff lint：All checks passed。
-- Ruff format：28 files already formatted。
-- 主程序仓库 `~/lcmd` 在验收后工作区干净；本轮没有主程序代码修改或新提交。
-
-#### Linux 真实 CLI 验收
-
-- 知识库目录发现正常；Linux/zh-CN、Linux/en-US、Windows/zh-CN、Windows/en-US 四种组合均成功加载，分别为 8、3、8、3 篇有效平台命令文档。
-- 平台命令、工具入口、工具详细页及多级子命令查询通过：`ls`、`dir`、`git`、`git init`、`docker`、`docker run`、`docker compose up`、`ssh`。
-- 中文/英文关键词搜索、多关键词 OR、`--full`、搜索帮助、版本显示和非交互管道输出通过。
-- Linux 端未匹配英文随机字符串时正确显示未找到提示；中文连续双字片段和单字匹配可能导致宽泛结果，符合当前冻结的中文匹配策略，本轮未修改搜索规则。
-- Windows/Linux 平台切换、中英文切换及非法平台/语言切换失败后的配置回滚均通过。
-- Linux 终端分页未能实测：当前知识库搜索结果不足 6 条，未达到分页阈值；Windows 自动化测试已覆盖分页逻辑。不得将此项记录为 Linux 实测通过。
-- 本轮真实 CLI 未重复测试知识库整体不可用降级；该项已有 Windows 端真实验收记录。
-
-#### 知识库格式问题与修复
-
-- Linux 初次加载时发现现有 13 篇 Markdown 文档缺少 TOML Front Matter 结束后的独立正文分隔线 `---`，导致 Parser/Validator 拒绝这些文档。
-- 已在 13 篇文档中各增加一行 `---`，除此之外未改动任何文档内容。
-- 修复范围：平台命令 4 篇；Docker 3 篇；Git 5 篇；SSH 1 篇。
-- 修复前后 `git diff --check` 通过；差异核对确认仅 13 行新增。
-- 知识库提交：`4ad7071`，提交说明 `fix: add required markdown body separators`。
-- 已推送至公开仓库 `WenZoo1982/lcmd-kb` 的 `main` 分支，推送范围 `ae84d69..4ad7071`。
-- Git 作者身份仅配置在 Linux 的 `~/lcmd-kb` 本地仓库：`WenZoo` / `wen.zoo@outlook.com`；未设置全局 Git 身份。
-
-#### 当前结论与后续
-
-- P6 主程序在 Windows 与 Linux Mint 22.3 的自动化和真实 CLI 跨平台验收已完成；Linux 端分页交互未取得实际验证，明确保留为未实测项。
-- 知识库 13 篇格式修复已提交并推送，Linux 与 Windows 本地知识库均已同步至 `4ad7071`；Windows 知识库工作区干净。
-- Windows 当前配置 `windows/zh-CN`，真实执行 `lcmd dir` 成功，正确显示中文用途、语法、常用参数、示例和注意事项。
-- Windows 端本轮未重新逐项执行另外三种平台/语言组合加载；四种组合均加载成功的实测记录来自 Linux Mint 22.3 验收，不将其误记为 Windows 本轮复验。
-- 至此 P6 阶段关闭；后续进入 P7 统一更新机制的设计与失败场景规划，不提前实现更新代码。
-
-
-### 15.7 Windows 知识库同步与最终复验（2026-11-03）
-
-#### Windows 知识库同步
-
-- Windows 知识库目录：`D:\\Project_DEV\\lcmd-kb`。
-- 同步前本地 HEAD 为 `ae84d69`，工作区有 13 篇文档的未提交修改。
-- 逐篇检查 `git diff` 后确认，这 13 篇本地修改与 Linux 已推送修复完全一致：每篇只新增 Front Matter 后的正文分隔线 `---`，没有其他内容差异；`git diff --check` 通过。
-- 用户确认后，在 Windows 本地仓库执行 `git reset --hard HEAD`，仅放弃已确认与远程重复的 13 处本地修改；随后 `git pull origin main` 快进至 `4ad7071`。
-- 同步后 `git log -1 --oneline` 显示 `4ad7071 fix: add required markdown body separators`；`git status --short` 无输出，工作区干净。
-
-#### Windows 真实 CLI 复验
-
-- 主程序目录：`D:\\Project_DEV\\lcmd`；使用现有 `.venv` 中的 `lcmd.exe`，未修改主程序代码或配置。
-- `lcmd platform`：当前平台 `windows`；可用平台 `linux`、`windows`。
-- `lcmd language`：当前语言 `zh-CN`；可用语言 `en-US`、`zh-CN`。
-- 首次执行 `lcmd ls` 返回未找到提示；这是预期行为，因为当前选择为 Windows 平台，Windows 知识库使用 `dir`，Linux 知识库使用 `ls`，不属于加载故障。
-- 执行 `lcmd dir` 成功显示 Windows 中文命令文档，包含用途、基本语法、常用参数、常用示例和必要注意事项，证明同步后的 Windows 中文知识文档可被正常解析、加载和渲染。
-- 本轮 Windows 只对当前 `windows/zh-CN` 配置进行真实 CLI 复验；未重新逐项执行 Linux/Windows 与 `zh-CN`/`en-US` 的四种组合加载测试。四种组合加载成功的结果已在 15.6 Linux 验收记录中说明。
-
-#### P6 最终结论
-
-- P6 主程序新架构实现、Windows 与 Linux Mint 22.3 自动化测试、静态检查及真实 CLI 验收均已完成。
-- 知识库格式修复 `4ad7071` 已在 Linux 推送，并已在 Windows 同步；两端知识库均达到该提交。
-- Windows 当前默认配置 `windows/zh-CN` 的实际查询复验通过。
-- Linux 端交互式分页因搜索结果不足 6 条，仍为未实测项；Windows 自动化测试覆盖分页逻辑。该限制如实保留，不作为已实测通过。
-- **P6 阶段正式完成并关闭。** 不再重复执行 P6 全量测试；后续按阶段计划进入 P7 统一更新机制的设计与失败场景规划。
+| 主程序版本 | 0.1.0 |
+| 知识库版本 | 0.1.0（本轮 Windows CLI 输出） |
+| 知识库 Major | 当前代码只接受 0 |
+| Python 最低版本 | 3.11 |
+| 默认平台 | windows |
+| 默认语言 | zh-CN |
+| 配置文件 | platformdirs 用户配置目录下 config.toml |
+| 默认知识库路径 | platformdirs 用户数据目录下 knowledge |
+| 配置字段 | [knowledge] path、platform、language，三者均为必需字段 |
+| 自定义路径 | 内部配置字段已存在；无用户 CLI 管理入口 |
+| 搜索分页 | 每页 5 条；交互终端自动分页 |
+| 在线更新 | 未实现 |
+| 安装包 | 未实现 |
+| 主程序/知识库远程 Release 更新 | 未实现 |
+| 命令执行 | 不执行 |
+| 系统命令安装检测 | 不检测 |
