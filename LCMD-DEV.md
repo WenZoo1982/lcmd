@@ -5,7 +5,7 @@
 - 主程序仓库：https://github.com/WenZoo1982/lcmd
 - 知识库仓库：https://github.com/WenZoo1982/lcmd-kb
 - 本地项目目录：D:\Project_DEV\lcmd
-- 当前开发阶段：P6 主程序重建及 Windows 端验收已完成；待 Linux Mint 22.3 跨平台验收
+- 当前开发阶段：P6 主程序重建及 Windows/Linux Mint 22.3 跨平台验收已完成；知识库格式修复已推送，待 Windows 知识库同步复验及阶段收尾
 - 首发目标：Windows x64、Linux AMD64；macOS 和 ARM64 暂不纳入首发。
 
 ---
@@ -991,3 +991,44 @@ P6 新架构实现、自动化测试、静态检查、真实知识库集成及 W
 8. 记录结果并修复跨平台问题；完成后再复核 Git 差异并决定 P6 最终收尾。
 
 **当前下一步仅执行 Linux Mint 测试机环境确认，不提前进行安装或修改。**
+
+
+### 15.6 Linux Mint 22.3 跨平台验收与知识库修复（2026-11-03）
+
+本节记录 Linux Mint 22.3 实际验收结果，并覆盖 15.5 中“Linux 验收尚未完成”的历史状态。主程序无需因本轮验收重新提交。
+
+#### Linux 环境与主程序
+
+- Linux Mint 22.3 虚拟机，架构 x86_64，Python 3.12.3，符合项目最低 Python 3.11 要求。
+- 主程序从 GitHub 克隆，包含 P6 主程序提交 `acd0467`；在独立 `.venv` 中安装开发依赖。
+- Linux 全量自动化测试：187 passed。
+- Ruff lint：All checks passed。
+- Ruff format：28 files already formatted。
+- 主程序仓库 `~/lcmd` 在验收后工作区干净；本轮没有主程序代码修改或新提交。
+
+#### Linux 真实 CLI 验收
+
+- 知识库目录发现正常；Linux/zh-CN、Linux/en-US、Windows/zh-CN、Windows/en-US 四种组合均成功加载，分别为 8、3、8、3 篇有效平台命令文档。
+- 平台命令、工具入口、工具详细页及多级子命令查询通过：`ls`、`dir`、`git`、`git init`、`docker`、`docker run`、`docker compose up`、`ssh`。
+- 中文/英文关键词搜索、多关键词 OR、`--full`、搜索帮助、版本显示和非交互管道输出通过。
+- Linux 端未匹配英文随机字符串时正确显示未找到提示；中文连续双字片段和单字匹配可能导致宽泛结果，符合当前冻结的中文匹配策略，本轮未修改搜索规则。
+- Windows/Linux 平台切换、中英文切换及非法平台/语言切换失败后的配置回滚均通过。
+- Linux 终端分页未能实测：当前知识库搜索结果不足 6 条，未达到分页阈值；Windows 自动化测试已覆盖分页逻辑。不得将此项记录为 Linux 实测通过。
+- 本轮真实 CLI 未重复测试知识库整体不可用降级；该项已有 Windows 端真实验收记录。
+
+#### 知识库格式问题与修复
+
+- Linux 初次加载时发现现有 13 篇 Markdown 文档缺少 TOML Front Matter 结束后的独立正文分隔线 `---`，导致 Parser/Validator 拒绝这些文档。
+- 已在 13 篇文档中各增加一行 `---`，除此之外未改动任何文档内容。
+- 修复范围：平台命令 4 篇；Docker 3 篇；Git 5 篇；SSH 1 篇。
+- 修复前后 `git diff --check` 通过；差异核对确认仅 13 行新增。
+- 知识库提交：`4ad7071`，提交说明 `fix: add required markdown body separators`。
+- 已推送至公开仓库 `WenZoo1982/lcmd-kb` 的 `main` 分支，推送范围 `ae84d69..4ad7071`。
+- Git 作者身份仅配置在 Linux 的 `~/lcmd-kb` 本地仓库：`WenZoo` / `wen.zoo@outlook.com`；未设置全局 Git 身份。
+
+#### 当前结论与后续
+
+- P6 主程序在 Windows 与 Linux Mint 22.3 的自动化和真实 CLI 跨平台验收已完成；Linux 端分页交互未取得实际验证，明确保留为未实测项。
+- 知识库 13 篇格式修复已提交并推送。Linux 本地知识库工作区在提交后应为干净状态；Windows 本地知识库尚待从 GitHub 同步至 `4ad7071` 并复验。
+- 下一步只需在 Windows 的 `D:\\Project_DEV\\lcmd-kb` 同步知识库提交，检查工作区状态并确认四种平台/语言组合仍可加载；不重新测试或推送主程序。
+- Windows 知识库复验完成后，记录结果并关闭 P6 阶段。
