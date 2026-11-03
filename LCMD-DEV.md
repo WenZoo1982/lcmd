@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，当前核验提交 `1d565d96d59b00e0559485db4fea4daa7cc03323`；本次实现说明更新以该提交中的源码为依据
-- 当前阶段：P6 架构及跨平台验收完成；准备以当前真实实现为基线讨论后续安装、更新和自定义知识库路径设计
+- 当前代码基线：主程序 `main` 分支，迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`；本次更新以该提交源码及用户实际测试输出为依据
+- 当前阶段：P6 架构及跨平台验收完成；阶段一“自定义知识库路径与迁移”的路径安全及迁移核心模块已实现并通过自动化测试，CLI 配置入口与启动恢复接入尚未完成
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（本轮 Windows 实际测试输出）
 
@@ -602,6 +602,26 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 - 如果配置已经成功切换，但删除旧知识库前发生断电，可能暂时留下新旧两份目录。实现时必须设计可恢复的清理记录/启动检查，确认当前配置指向的新知识库有效后，再完成旧目录清理；不能误删当前配置指向的知识库。
 - 启动恢复机制的具体记录格式、清理时机和异常提示属于实现细节，需在开发前结合代码确定，但不得改变上述迁移事务原则。
 
+### 8.4.1 迁移核心模块实现状态（代码已提交，CLI 尚未接入）
+
+提交 `a516d4c`（`feat: add secure knowledge base migration`）新增以下文件：
+
+- `src/lcmd/core/path_security.py`：独立路径安全检查模块，提供 `validate_knowledge_path()` 和 `validate_migration_target()`；检查解析后路径边界、受保护目录、源/目标重叠、符号链接及 Windows Reparse Point。
+- `src/lcmd/core/migration.py`：独立迁移核心模块，提供 `migrate_knowledge()` 和 `recover_migration()`；负责复制、文件 SHA-256 与目录清单校验、原子配置切换、迁移日志和旧目录清理恢复。
+- 对应测试：`tests/test_path_security.py`、`tests/test_migration.py`。
+
+当前实现落实的关键行为：
+
+- 目标路径是知识库根目录，不追加子目录；目标已存在时默认要求调用方明确传入覆盖确认。
+- 复制阶段报告已复制字节和总字节，调用方可据此显示百分比；总大小只用于进度，不作为完整性校验条件。
+- 完整性检查比较相对路径文件清单、SHA-256 和目录清单；扫描时拒绝符号链接、重解析点和特殊文件。
+- 配置使用现有 `save_config()` 原子保存；只有复制和验证成功后才切换路径，平台和语言保持不变。
+- 旧目录清理是尽力操作。清理失败时迁移仍成功，发出 `MigrationCleanupWarning` 并保留迁移日志。
+- 迁移日志独立保存旧/新路径、源目录身份及原始文件清单；恢复时先确认当前配置指向的新知识库有效，再验证旧目录身份和剩余内容，避免误删当前知识库或被替换的目录。
+- 若配置缺失、日志损坏、目录身份不符或源目录出现非预期内容，恢复逻辑拒绝自动删除。
+
+当前边界：迁移核心模块尚未接入 `cli/app.py`，`recover_migration()` 尚未接入程序启动流程；用户还不能通过 `--config` / `--path` 使用该功能。阶段一尚未完成，不得推进安装包、更新机制或完整帮助开发。
+
 ### 8.5 Windows 安装包与首次初始化（已确认的产品方向，尚未实现）
 
 - Windows 安装包安装主程序时，默认同时部署官方知识库；主程序和知识库一起交付，避免安装后没有可查询内容。
@@ -821,6 +841,23 @@ Parser 和 Validator 有意分工：Parser 不因 summary 缺失或正文分隔�
 
 多关键词采用 OR 命中；覆盖奖励使命中更多查询片段的文档更有优势。搜索不扫描磁盘、不联网，也不搜索未加载的平台或语言。
 
+### 13.8 路径安全与知识库迁移：`core/path_security.py`、`core/migration.py`
+
+| 函数/类型 | 当前职责与契约 |
+|---|---|
+| `PathSecurityError` | 知识库路径安全校验失败 |
+| `validate_knowledge_path(path, protected_paths=None)` | 校验知识库根目录、解析后路径边界及受保护路径，并通过 `discover_catalog()` 验证知识库结构 |
+| `validate_migration_target(target_path, source_path, protected_paths=None)` | 校验迁移目标与源目录的安全边界及重叠关系；不负责执行迁移 |
+| `MigrationError` | 迁移或恢复过程失败 |
+| `MigrationConfirmationRequired` | 目标目录存在且调用方尚未明确确认覆盖 |
+| `MigrationCleanupWarning` | 新知识库已切换成功，但旧目录未能完全清理 |
+| `migrate_knowledge(config_path, target_path, overwrite=False, progress_callback=None, protected_paths=None)` | 执行复制、完整性验证、配置切换和旧目录尽力清理；返回更新后的 `AppConfig` |
+| `recover_migration(config_path, protected_paths=None)` | 根据独立迁移日志验证当前新库、旧目录身份及剩余内容，再尝试完成旧目录清理；无日志时返回 False |
+
+迁移日志文件名为 `.lcmd-migration.json`，位于配置文件所在目录。日志包含 source、target、state、source_identity 和 source_manifest。源目录身份用于拒绝清理被替换的目录；源清单保留文件 SHA-256 与目录相对路径，以支持部分删除后的安全恢复。旧目录清理失败时保留日志。
+
+`migrate_knowledge()` 与 `recover_migration()` 当前是独立核心 API，不代表 CLI 已可调用；启动恢复、交互确认和进度 UI 必须在后续 CLI 接入任务中实现。
+
 ### 13.7 终端渲染：`output/renderer.py`
 
 | 函数 | 当前职责 |
@@ -939,6 +976,34 @@ language 切换流程相同，只替换 language 字段。两种切换均先加�
 4. 历史 Linux 运行记录：证明当时该提交在 Linux VM 中通过，不代表本次文档提交重新运行过测试。
 
 后续功能开发必须根据改动模块选择定向测试，并执行全量 pytest、Ruff lint、Ruff format。涉及终端交互、配置目录或路径语义时，还需在目标操作系统做真实 CLI 验收。
+
+### 6.3 Windows 11 迁移核心模块自动化测试（提交 `a516d4c`）
+
+用户在 Windows 11、Python 3.14.10 环境中实际执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/test_migration.py -v
+```
+
+结果：18 passed。随后执行项目级检查：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\ruff.exe check .
+.\.venv\Scripts\ruff.exe format --check .
+```
+
+结果：
+
+- pytest：228 passed（2.91s）
+- Ruff lint：All checks passed
+- Ruff format：32 files already formatted
+
+本轮新增 4 个文件：`migration.py`、`path_security.py`、`test_migration.py`、`test_path_security.py`。迁移定向测试覆盖覆盖确认、复制/完整性/配置保存失败保护、旧目录清理失败、日志恢复、目录身份替换检测、部分删除恢复、非预期文件拒绝及配置缺失提示等行为。以上是自动化测试证据，不代表已完成 CLI 交互或 Windows 人工迁移流程验收。
+
+### 6.4 本轮未单独复测的内容
+
+本轮 Windows CLI 测试没有重新执行 pytest/Ruff；自动化检查记录来自此前 Linux VM 的 187 项测试和静态检查。后续若修改程序代码，必须重新执行相关自动化测试。配置文件损坏、无效路径、manifest 错误、符号链接攻击等边界场景有自动化测试覆盖，但本轮没有逐项进行人工破坏性测试。
 
 ## 16. 新功能开发前的代码定位规则
 
