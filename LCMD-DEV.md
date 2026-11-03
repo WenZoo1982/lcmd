@@ -7,7 +7,7 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，代码功能提交 `acd04675f74f3f303f7a5e464553a48250940c05`；随后文档验收提交至 `d2b40a51dc53acf988479145df9407c40aecc5f2`
+- 当前代码基线：主程序 `main` 分支，当前核验提交 `1d565d96d59b00e0559485db4fea4daa7cc03323`；本次实现说明更新以该提交中的源码为依据
 - 当前阶段：P6 架构及跨平台验收完成；准备以当前真实实现为基线讨论后续安装、更新和自定义知识库路径设计
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（本轮 Windows 实际测试输出）
@@ -495,16 +495,9 @@ language = "zh-CN"
 
 ## 7. 当前仓库与同步基线
 
-截至 2026-11-03，本轮 GitHub 主程序仓库核验：
+截至本次实现说明整理时，GitHub 主程序仓库 `main` 分支已包含文档同步提交 `1d565d96d59b00e0559485db4fea4daa7cc03323`。该提交是本次源码审查和文档补充的基线。用户随后已在 Windows 本地执行 `git pull --ff-only origin main`，终端显示从 `d2b40a5` Fast-forward 到 `1d565d9`，仅更新 `LCMD-DEV.md`。
 
-- 默认分支：`main`
-- 当前最新提交：`d2b40a51dc53acf988479145df9407c40aecc5f2`
-- 该提交为 P6 跨平台验收文档收尾提交。
-- P6 功能代码提交：`acd04675f74f3f303f7a5e464553a48250940c05`。
-- 本轮 Windows 用户已将主程序同步到 `d2b40a5`；知识库同步到 `4ad7071`，用户终端显示两个仓库均与 `origin/main` 同步且工作区干净。
-- Linux VM 主程序和知识库也已同步至相同对应提交并完成自动化测试。
-
-以上本地状态以用户提供的终端输出为证；远程 GitHub 状态以远程仓库核验为证。今后开始新工作时仍需重新检查，不可直接假定本地没有新改动。
+此前 Linux VM 自动化测试基线为主程序 `d2b40a5`、知识库 `4ad7071`；本次文档更新不改变程序代码，因此不能将旧测试结果误写为对新代码的重新测试。今后开始新工作仍需重新检查远程与本地状态。
 
 ---
 
@@ -581,3 +574,293 @@ P6 已完成的目标：
 | 主程序/知识库远程 Release 更新 | 未实现 |
 | 命令执行 | 不执行 |
 | 系统命令安装检测 | 不检测 |
+
+
+## 12. 核心数据模型与对象关系
+
+本节依据当前 `src/lcmd/knowledge/models.py` 和 `src/lcmd/cli/app.py`。
+
+所有知识模型均为 `@dataclass(frozen=True, slots=True)`：实例创建后字段不可重新赋值，并使用 slots。不要把它们当作可随意修改的普通字典。
+
+### 12.1 运行状态
+
+`AppState`（定义于 `cli/app.py`）：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `config` | `AppConfig` | 当前用户配置 |
+| `catalog` | `KnowledgeCatalog \| None` | 已发现的知识库目录索引；初始化失败时可为 None |
+| `knowledge` | `KnowledgeBase \| None` | 当前平台/语言加载出的文档集合；不可用时为 None |
+
+`AppState` 是 CLI 初始化后放入 Typer 根 Context 的运行状态。search、platform、language 和动态查询命令从根 Context 读取它。切换平台或语言时返回新的 AppState，不原地修改旧状态。
+
+### 12.2 知识库模型
+
+| 模型 | 字段 | 说明 |
+|---|---|---|
+| `PlatformInfo` | `name: str`、`languages: tuple[str, ...]` | 一个平台及其实际发现的语言目录 |
+| `ToolInfo` | `name: str`、`languages: tuple[str, ...]` | 一个第三方工具及其实际发现的语言目录 |
+| `KnowledgeCatalog` | `root: Path`、`version: str`、`platforms: tuple[PlatformInfo, ...]`、`tools: tuple[ToolInfo, ...]` | Manifest 版本和动态目录发现结果 |
+| `KnowledgeDocument` | `id`、`category`、`platform`、`tool`、`language`、`summary`、`body` | 单篇已解析、已校验文档 |
+| `KnowledgeBase` | `platform: str`、`language: str`、`documents: tuple[KnowledgeDocument, ...]` | 当前平台/语言下可查询的全部有效文档 |
+| `QueryResult` | `documents: tuple[KnowledgeDocument, ...]`、`children: tuple[str, ...]` | 精确查询结果；文档与下级命令可同时存在 |
+| `SearchResult` | `document: KnowledgeDocument`、`score: float` | 一篇文档及其搜索得分 |
+
+`KnowledgeDocument` 的 `category` 只能是 `"platforms"` 或 `"tools"`。其 `__post_init__()` 要求 platform 与 tool 必须且只能指定一个；category 也必须与指定的归属字段相符。该模型校验的是文档归属关系，不校验 Markdown 内容质量。
+
+`id` 是知识文档相对于知识库命令内容的 POSIX 风格路径标识。查询、搜索和渲染模块会从该 ID 解析命令名、工具名和子命令层级。新增路径规则时必须同步检查这几个消费者，不能只改 Loader。
+
+### 12.3 Parser 中间模型
+
+`ParsedDocument` 定义在 `knowledge/parser.py`，承载 Front Matter 元数据和 Markdown 正文，供 Validator 检查。它不是最终知识文档；Loader 在解析、校验通过后才构造 `KnowledgeDocument`。
+
+## 13. 模块函数、输入输出与错误边界
+
+本节记录当前源码中的主要函数。新增、重命名或改变函数契约时，应同步更新本节。
+
+### 13.1 CLI：`src/lcmd/cli/app.py`
+
+| 函数/类型 | 当前职责与契约 |
+|---|---|
+| `DynamicTyperGroup.resolve_command(ctx, args)` | Typer 命令解析钩子。已注册命令或以 `-` 开头的首参数交给 Typer；其他未知首参数被记录为动态知识查询参数，并创建占位命令对象。 |
+| `initialize_state(config_file=None, default_knowledge_path=None)` | 读取配置或建立默认配置；调用 `discover_catalog()` 和 `load_knowledge()`；返回 AppState。知识库加载的 `KnowledgeLoadError/OSError` 转为 catalog/knowledge 均为 None 的不可用状态；配置读取错误不在此处吞掉。 |
+| `switch_platform(state, platform, config_file)` | 要求已有 catalog；将平台名转小写；先加载新平台/当前语言，再保存配置；成功后返回新 AppState。 |
+| `switch_language(state, language, config_file)` | 要求已有 catalog；先加载当前平台/新语言，再保存配置；成功后返回新 AppState。 |
+| `_show_platforms()` / `_show_languages()` | 展示当前选择和 catalog 实际发现的可用值；catalog 不可用或平台不存在时显示提示。 |
+| `_show_version()` | 显示程序版本；只读取配置和发现 Manifest/catalog 版本，不加载 Markdown 文档，也不写配置。 |
+| `create_app()` | 注册 Typer 应用、根 callback 和 search/platform/language 命令；动态查询在根 callback 中处理。 |
+
+根 callback 的执行顺序是：若指定 `--version`，先走版本专用路径并退出；否则初始化 AppState 并放入根 Context；若解析器记录了动态参数，则要求 knowledge 可用，调用 `query_document()` 和 `render_query_result()` 后退出；否则由 Typer 调用注册的 search/platform/language 命令。没有子命令时显示帮助。
+
+search 命令把多个 keyword 参数用空格连接成一个字符串，调用 `search_knowledge()`，再调用 `render_search_results()`。platform/language 无参数时显示可用值；有参数时调用对应 switch 函数。切换失败时 CLI 显示失败提示并以退出码 1 退出。
+
+### 13.2 配置与路径：`core/config.py`、`core/paths.py`
+
+| 函数/类型 | 当前职责与契约 |
+|---|---|
+| `ConfigError` | 配置读取、解析、结构、字段或保存失败的 ValueError 子类 |
+| `AppConfig` | 不可变配置对象，字段为 knowledge_path、platform、language |
+| `_validate_config(config)` | 检查对象类型、路径类型/非空、platform 和 language 为非空字符串 |
+| `load_config(path)` | UTF-8（允许 BOM）读取 TOML；要求顶层只有 knowledge，且该表恰好有 path/platform/language；将 path 展开用户目录后转 Path；错误转 ConfigError |
+| `save_config(config, path)` | 验证配置；创建父目录；写同目录临时文件、flush/fsync 后用 os.replace 原子替换；失败转 ConfigError，并尽力清理临时文件 |
+| `get_config_dir()` | 通过 platformdirs 获取用户配置目录 |
+| `get_config_file()` | 配置目录下的 config.toml |
+| `get_data_dir()` | 通过 platformdirs 获取用户数据目录 |
+| `get_default_knowledge_path()` | 返回数据目录下 knowledge；只计算路径，不创建知识库目录 |
+
+配置文件严格要求三个字段，不能把“AppConfig 有默认值”误解为“现有 TOML 可以省略字段”。配置模块只检查路径字段是否为有效 Path 值，不检查路径是否存在、Manifest 是否兼容或 Markdown 是否可加载；这些属于 Loader。
+
+### 13.3 文档解析与校验：`parser.py`、`validator.py`
+
+| 函数/类型 | 当前职责与契约 |
+|---|---|
+| `parse_document(content)` | 解析开头 TOML Front Matter，返回 ParsedDocument；负责分离 metadata/body，不负责 summary 业务规则和正文分隔线规则 |
+| `DocumentParseError` | Front Matter 缺失、格式错误或重复键等解析错误 |
+| `validate_document(document)` | 校验 metadata 必须是只含非空字符串 summary 的字典；正文首个非空行必须是独立的 `---`，其后正文必须非空 |
+| `DocumentValidationError` | 文档结构不符合当前必要合同 |
+
+Parser 和 Validator 有意分工：Parser 不因 summary 缺失或正文分隔线不正确而越权判断；Validator 不负责 TOML 文本解析。不要把推荐章节、参数数量、语言表达或示例质量加入 Validator。
+
+### 13.4 Loader：`knowledge/loader.py`
+
+| 函数/类型 | 当前职责与契约 |
+|---|---|
+| `KnowledgeLoadError` | 知识库整体结构、兼容性或加载条件错误 |
+| `_is_within_root(path, root)` | 检查解析后的路径是否位于根目录内 |
+| `_is_reserved_name(name)` | 检查 Windows 保留设备名 |
+| `_validate_slug(name, description)` | 检查小写 ASCII slug 及保留名 |
+| `_validate_language(name)` | 检查语言目录标签格式 |
+| `_check_duplicate_names(paths, description)` | 检查同级目录大小写折叠后的名称冲突 |
+| `_list_directories(path, description, root)` | 检查目录可访问性、符号链接、越界路径和同级名称冲突，再排序返回目录 |
+| `_read_manifest(root)` | 读取 JSON，要求只有 version 字段、版本符合当前三段式格式且 Major 为 0 |
+| `discover_catalog(root)` | 验证知识库根目录、Manifest、commands/platforms，动态发现平台/语言/工具/语言，返回 KnowledgeCatalog |
+| `_load_markdown_directory(...)` | 递归读取一个语言目录中的 Markdown，解析、校验并构造 KnowledgeDocument；文档级问题通常隔离跳过 |
+| `load_knowledge(catalog, platform, language)` | 验证平台和语言可用性，加载当前平台命令及当前语言可用的工具文档，返回 KnowledgeBase |
+
+路径安全策略需要按阶段准确理解：
+
+- 目录发现阶段的目录扫描会拒绝扫描目录中的符号链接、越界路径和同级目录名称冲突；这些问题可能使 catalog 发现失败。
+- Markdown 加载阶段对单个符号链接文档/目录会跳过；对不可读取或解析、校验失败的单篇文档进行隔离。
+- 同一目录中，`foo.md` 与 `foo/` 是允许的组合；同类型的 Markdown 文件或目录若大小写折叠后冲突，则冲突项会被跳过。
+- 当前平台/语言必须有至少一篇有效平台命令文档，否则 load_knowledge 失败。
+- 工具没有当前语言目录时跳过该工具；工具文档无效不会自动使平台命令整体失效。
+- tools 目录可以不存在；commands/platforms 是必需结构。
+
+新增知识库类别或路径层级时，必须同时更新 catalog discovery、document ID 生成、query/search/render 对 ID 的解释，以及测试。不能只在目录中新增一层就假设程序自动理解其语义。
+
+### 13.5 精确查询：`knowledge/query.py`
+
+| 函数 | 当前职责 |
+|---|---|
+| `_get_tool_documents(knowledge, tool)` | 从当前 KnowledgeBase 中筛选指定工具文档，并提取其相对路径段 |
+| `_find_tool_entry(tool_documents, tool)` | 查找根语言目录下的同名入口文件 `<tool>.md` |
+| `_find_document(tool_documents, target)` | 将目标路径最后一段映射为同名 .md 文件并查找 |
+| `_find_children(tool_documents, target, tool)` | 从文档 ID 推导指定位置的直接子命令 |
+| `_query_tool(knowledge, tool, subcommands)` | 实现工具入口、无入口单篇/多篇和子命令查询 |
+| `query_document(knowledge, arguments)` | 统一查询入口；单参数时同时匹配平台命令和同名工具，再组合 documents/children |
+
+`query_document()` 对输入参数执行小写规范化。平台命令只在参数长度为 1 时匹配；工具名称和子命令路径按工具文档 ID 的路径段匹配。最终文档按 ID 排序，子命令去重并排序。
+
+### 13.6 搜索：`knowledge/search.py`
+
+| 函数 | 当前职责 |
+|---|---|
+| `_extract_usage(body)` | 从 Markdown 中提取标题为“用途”的章节，遇到下一个标题结束 |
+| `_query_units(keyword)` | 将查询拆为中文片段和英文 token，并去重保序 |
+| `_contains_unit(text, unit)` | 中文使用包含匹配；英文使用不区分大小写的单词边界匹配 |
+| `_contains_phrase(text, keyword)` | 完整关键词匹配；含中文时使用包含匹配，否则使用英文边界匹配 |
+| `_document_names(document)` | 生成参与搜索的命令名、工具名和子命令路径 |
+| `_score_field(text, units, weight)` | 按命中单元覆盖率计算字段得分 |
+| `_score_document(document, units, keyword, full)` | 汇总名称、summary、用途及可选全文得分，并加完整短语和多关键词覆盖奖励 |
+| `search_knowledge(knowledge, keyword, full=False)` | 搜索当前 KnowledgeBase，丢弃零分文档，按得分降序和 ID 升序稳定排序 |
+
+多关键词采用 OR 命中；覆盖奖励使命中更多查询片段的文档更有优势。搜索不扫描磁盘、不联网，也不搜索未加载的平台或语言。
+
+### 13.7 终端渲染：`output/renderer.py`
+
+| 函数 | 当前职责 |
+|---|---|
+| `_get_document_name(document)` | 从 ID 生成显示名称 |
+| `_get_document_source(document)` | 生成平台命令/第三方工具来源说明 |
+| `_get_console(console)` | 使用传入 Console 或创建默认 Console |
+| `render_document(document, console)` | 用 Rich Markdown 和 Panel 显示单篇文档 |
+| `render_query_result(result, console)` | 显示零结果提示、一个或多个文档，以及可选的子命令表 |
+| `_render_search_page(results, start, end, console)` | 显示指定切片的搜索表格 |
+| `render_search_results(results, console, page_size=5)` | 处理空结果、分页阈值、非交互一次性输出和交互翻页 |
+
+分页输入只接受空输入（下一页）或 q（退出）；其他输入会重新提示。page_size 小于 1 时抛出 ValueError。分页属于 Renderer，不属于 Search 算法。
+
+## 14. 端到端执行流程
+
+### 14.1 启动和初始化
+
+```text
+console script / python -m lcmd
+  -> main.main()
+  -> create_app()
+  -> Typer 根 callback
+  -> initialize_state()
+       -> load_config() 或创建默认 AppConfig
+       -> discover_catalog(knowledge_path)
+       -> load_knowledge(catalog, platform, language)
+       -> 首次成功时 save_config()
+  -> AppState 放入 ctx.obj
+  -> 分发注册命令或动态知识查询
+```
+
+注意两个不同的失败路径：
+
+- 配置文件存在但无法读取/解析/校验：ConfigError 向 CLI 传播，根 callback 显示初始化失败并以退出码 1 退出。
+- 配置有效，但知识库发现或加载遇到 KnowledgeLoadError/OSError：initialize_state 返回 catalog=None、knowledge=None 的 AppState；之后查询或搜索提示知识库不可用，platform/language 查询仍可显示当前配置，但无法列出可用值。
+
+首次启动只有在知识库成功加载后才保存默认配置。首次知识库加载失败不会写入初始配置。
+
+### 14.2 精确命令查询
+
+```text
+lcmd docker compose up
+  -> DynamicTyperGroup 将未知命令参数保存到 ctx.meta
+  -> 根 callback 初始化 AppState
+  -> 检查 state.knowledge
+  -> query_document(knowledge, ("docker", "compose", "up"))
+  -> _query_tool()
+  -> _find_document() / _find_children()
+  -> QueryResult
+  -> render_query_result()
+  -> Rich 文档 Panel 和/或子命令表
+```
+
+`lcmd ls` 与 `lcmd docker compose up` 共用动态入口，但 query 内部根据参数长度和文档类别分别处理平台命令及工具子命令。
+
+### 14.3 搜索
+
+```text
+lcmd search "复制文件" --full
+  -> Typer search_command
+  -> 合并多个 keyword 参数
+  -> search_knowledge(knowledge, keyword, full=True)
+  -> 生成 query units
+  -> 对每篇 KnowledgeDocument 计算相关度
+  -> 排序得到 SearchResult tuple
+  -> render_search_results()
+  -> Rich 表格 / 交互分页
+```
+
+搜索计算与输出分页必须保持分层。增加新的搜索字段或改变权重修改 search.py 并更新搜索测试；改变每页数量、提示或输入行为修改 renderer.py 并更新渲染测试。
+
+### 14.4 平台/语言切换
+
+```text
+lcmd platform linux
+  -> 读取根 AppState
+  -> switch_platform()
+       -> replace(config, platform=输入值.lower())
+       -> load_knowledge(现有 catalog, 新平台, 当前语言)
+       -> save_config(新配置)
+       -> 返回新 AppState
+  -> CLI 显示切换成功
+```
+
+language 切换流程相同，只替换 language 字段。两种切换均先加载成功再保存配置；加载失败不会保存。保存失败由 ConfigError 传播，CLI 显示切换失败。知识库路径保持不变。
+
+### 14.5 版本显示
+
+`lcmd --version` 走专用分支：读取现有配置或使用默认知识库路径，调用 `discover_catalog()` 读取知识库版本；不调用 `load_knowledge()`，不解析 Markdown，不保存初始配置。因此版本显示可报告 Manifest 版本，但不等同于完整知识库可用性检查。
+
+## 15. 测试地图与证据边界
+
+测试文件与功能对应关系：
+
+| 测试文件 | 主要覆盖范围 | 测试数量（当前源码） |
+|---|---|---:|
+| `tests/test_cli.py` | 帮助、版本、动态查询、search/platform/language、初始化和切换保存时序 | 28 |
+| `tests/test_config.py` | 默认值、TOML 读写、字段校验、原子保存失败保护 | 17 |
+| `tests/test_loader.py` | Manifest、目录发现、路径命名、平台/语言选择、文档隔离、符号链接和冲突 | 26 |
+| `tests/test_models.py` | 数据模型字段、归属约束、不可变和 slots | 12 |
+| `tests/test_query.py` | 平台命令、工具入口、子命令、多级路径、同名匹配和子命令列表 | 15 |
+| `tests/test_search.py` | 中文/英文拆分、匹配边界、字段范围、全文、OR、评分优先级和稳定排序 | 16 |
+| `tests/test_renderer.py` | 文档/查询/搜索展示、空结果、终端分页、退出、无效输入和 page_size | 16 |
+| `tests/test_parser.py` | Front Matter 边界、TOML 解析错误、正文保留和职责边界 | 12 |
+| `tests/test_validator.py` | summary、正文分隔线、空正文、CRLF 和非修改性 | 19 |
+| `tests/test_paths.py` | platformdirs 路径、Path 类型、默认路径不创建目录 | 6 |
+
+以上当前列出的测试函数合计 167 项。Linux 历史运行记录为 187 passed；两者数字不一致，说明测试文件可能还有参数化用例或其他收集项。**实际测试总数以重新运行 pytest 的收集结果为准**，不要把测试函数数量等同于 pytest 收集数量。
+
+测试证据分层：
+
+1. 源码实现：证明当前代码路径和分支存在。
+2. 自动化测试：证明测试用例覆盖的输入和断言行为。
+3. 用户人工 CLI 验收：证明用户在指定 Windows 环境中实际观察到的行为。
+4. 历史 Linux 运行记录：证明当时该提交在 Linux VM 中通过，不代表本次文档提交重新运行过测试。
+
+后续功能开发必须根据改动模块选择定向测试，并执行全量 pytest、Ruff lint、Ruff format。涉及终端交互、配置目录或路径语义时，还需在目标操作系统做真实 CLI 验收。
+
+## 16. 新功能开发前的代码定位规则
+
+收到新功能需求后，先在总控文档中定位业务流程，再按以下顺序核对代码：
+
+1. 确认用户场景和产品行为，不把界面表现直接等同于内部实现。
+2. 查找现有数据模型是否已有可复用字段或对象。
+3. 沿端到端流程找到 CLI 入口、业务函数、数据模型和 Renderer。
+4. 区分已有能力、缺失入口、缺失业务逻辑和缺失测试。
+5. 明确本次需要修改的文件及其职责；优先复用现有函数，不复制 Loader、Parser 或配置校验规则。
+6. 明确兼容性约束和失败行为，尤其是配置原子保存、切换先加载后保存、文档级错误隔离、语言不回退和搜索/渲染分层。
+7. 先补充或调整测试，再实现功能；验收后更新本总控文档中的实现状态、调用链、测试证据和版本基线。
+
+总控文档是开发入口，不替代代码审查。每次任务开始仍须核对目标文件当前内容、Git 状态和远程基线；但对于本文已准确记录且代码未变化的业务逻辑，不要求用户重复解释。若代码与本文冲突，以当前实际代码和测试为准，并在任务结束时修正文档。
+
+## 17. 核心模块修改影响速查
+
+| 需求类型 | 首要模块 | 通常需要同步检查 |
+|---|---|---|
+| 新增 CLI 命令/全局选项 | `cli/app.py` | 动态命令分发、帮助、CLI 测试 |
+| 修改配置字段/格式 | `core/config.py` | `AppConfig`、初始化、切换、旧配置兼容、配置测试 |
+| 修改默认目录 | `core/paths.py` | platformdirs 行为、初始化、路径测试 |
+| 新增知识库目录类别/层级 | `knowledge/loader.py` | models、document ID、query、search、renderer、loader 测试 |
+| 修改 Markdown 格式 | `knowledge/parser.py` / `validator.py` | Loader 错误隔离、知识库文档合同、parser/validator 测试 |
+| 修改平台命令或工具导航 | `knowledge/query.py` | QueryResult、ID 路径约定、Renderer、query 测试 |
+| 修改搜索匹配/权重 | `knowledge/search.py` | 中文/英文匹配、排序稳定性、search 测试 |
+| 修改表格、Panel、分页交互 | `output/renderer.py` | Console/TTY 行为、renderer 测试 |
+| 修改启动/初始化/切换流程 | `cli/app.py` | ConfigError、KnowledgeLoadError、持久化时序、CLI 测试 |
+
+本表是定位入口，不意味着每项需求只修改表中一个文件。任何跨层需求都应沿调用链检查完整影响范围。
