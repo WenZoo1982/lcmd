@@ -5,7 +5,7 @@
 - 主程序仓库：https://github.com/WenZoo1982/lcmd
 - 知识库仓库：https://github.com/WenZoo1982/lcmd-kb
 - 本地项目目录：D:\Project_DEV\lcmd
-- 当前开发阶段：P5 已完成；P6 正在完成新架构设计冻结，尚未开始清理和重建主程序
+- 当前开发阶段：P6 主程序重建及 Windows 端验收已完成；待 Linux Mint 22.3 跨平台验收
 - 首发目标：Windows x64、Linux AMD64；macOS 和 ARM64 暂不纳入首发。
 
 ---
@@ -927,3 +927,67 @@ cli/app.py
 
 本节与 14.5 合并后，作为 P6 主程序重建的目标接口和行为契约。尚未代表代码实现或验收完成。开始清理旧源码前，仍须由用户在本地核对 Git 工作区状态；旧实现和旧测试只在该检查通过后一次性清理。
 
+
+
+---
+
+## 15. P6 主程序重建与 Windows 端验收状态（2026-11-03）
+
+本节为当前实际进度记录；若前文历史计划或“尚未实现/尚未开始”的描述与本节冲突，以本节状态为准。P6 的 Linux Mint 跨平台验收仍未完成，因此当前不标记整个 P6 阶段最终关闭。
+
+### 15.1 主程序提交
+
+- 主程序仓库：`WenZoo1982/lcmd`
+- 分支：`main`
+- P6 实现提交：`acd0467`
+- 提交说明：`feat: complete P6 knowledge architecture and CLI integration`
+- 已成功推送 GitHub：`5126a20..acd0467 main -> main`
+- 推送前本地工作区干净；提交包含 29 个文件，新增 3319 行、删除 1970 行。
+- 旧 `knowledge/lookup.py` 与 `tests/test_lookup.py` 已删除；新 `knowledge/models.py`、`knowledge/query.py` 及其测试已加入。
+- 本次提交没有包含临时配置、测试知识库或备份文件。
+
+### 15.2 自动化与静态检查
+
+Windows 11 开发环境最近一次验收结果：
+
+| 检查 | 结果 |
+|---|---|
+| 全量 pytest | 187 passed |
+| Ruff lint | All checks passed |
+| Ruff format | 28 files already formatted |
+
+自动化测试与真实 CLI 验收分别执行，不以测试通过替代实际命令运行。
+
+### 15.3 真实知识库与 CLI 集成验收
+
+- 真实知识库版本 `0.1.0`；Windows/Linux 与 `zh-CN`/`en-US` 四种平台语言组合均成功加载。
+- 固定 CLI 入口：帮助、无参数帮助、版本、platform、language、search 均已验证。
+- 动态精确查询：平台命令、工具入口、工具子命令、多级子命令、大小写不敏感和未命中提示均已验证。
+- 搜索：中文/英文、多关键词 OR、`--full`、交互式分页和非交互式管道输出均已验证。
+- 平台与语言切换成功；非法平台/语言切换失败后原配置保持不变。
+- 知识库不可用时的降级行为已真实验证：platform/language 仍显示已保存配置；search 和动态查询返回明确错误；version 显示知识库不可用；原配置通过 SHA256 校验完整恢复。
+- 使用隔离临时知识库通过 3 项特殊 CLI 集成场景：平台命令与同名工具同时显示、同名文档与子目录并存、多级子命令查询。临时测试文件自动清理。
+- 正式知识库中的 Docker 目录结构已验证入口、run、compose/up 和无入口子目录导航行为。
+
+### 15.4 P6 当前结论
+
+<badge>Windows 端通过</badge>
+
+P6 新架构实现、自动化测试、静态检查、真实知识库集成及 Windows 端 CLI 验收已完成。尚未完成的是 Linux Mint 22.3 环境的跨平台验收；因此 P6 阶段整体仍处于待 Linux 验收状态，不提前宣告最终关闭。
+
+### 15.5 下一阶段：Linux Mint 22.3 跨平台验收
+
+在 Linux Mint 22.3 x86_64 虚拟机中，从 GitHub 拉取主程序与知识库，使用独立虚拟环境安装和测试。按单步方式推进，不假设 Linux 测试机已经 clone 仓库或安装所需工具。
+
+验收顺序：
+
+1. 确认 Linux Mint 版本、架构和 Python 版本（项目最低 Python 3.11）。
+2. 从 GitHub 拉取主程序 `WenZoo1982/lcmd`，确认代码包含提交 `acd0467`。
+3. 拉取知识库 `WenZoo1982/lcmd-kb`，配置 Linux 下的知识库根目录；不得复用 Windows 绝对路径。
+4. 创建 Linux 虚拟环境并安装项目开发依赖。
+5. 执行全量 pytest、Ruff lint 和 format。
+6. 真实 CLI 验收：帮助、版本、platform/language、中文文档显示、工具入口/多级子命令、中文搜索、分页、平台/语言切换、未命中与知识库不可用降级。
+7. 重点检查 Linux 文件系统大小写行为、路径安全、UTF-8 中文输出和终端交互差异。
+8. 记录结果并修复跨平台问题；完成后再复核 Git 差异并决定 P6 最终收尾。
+
+**当前下一步仅执行 Linux Mint 测试机环境确认，不提前进行安装或修改。**
