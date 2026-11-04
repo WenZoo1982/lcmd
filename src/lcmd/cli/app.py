@@ -1,3 +1,4 @@
+import warnings
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated, Any
@@ -8,6 +9,12 @@ from typer.core import TyperGroup
 
 from lcmd import __version__
 from lcmd.core.config import AppConfig, ConfigError, load_config, save_config
+from lcmd.core.migration import (
+    MigrationCleanupWarning,
+    MigrationConfirmationRequired,
+    MigrationError,
+    migrate_knowledge,
+)
 from lcmd.core.paths import get_config_file, get_default_knowledge_path
 from lcmd.knowledge.loader import (
     KnowledgeLoadError,
@@ -360,7 +367,49 @@ def create_app() -> typer.Typer:
 
         if config:
             if path is not None:
-                console.print("知识库路径迁移功能尚未接入。", style="yellow")
+                config_file = get_config_file()
+
+                try:
+                    with warnings.catch_warnings(record=True) as migration_warnings:
+                        warnings.simplefilter("always", MigrationCleanupWarning)
+
+                        try:
+                            migrated_config = migrate_knowledge(
+                                config_file,
+                                path,
+                            )
+                        except MigrationConfirmationRequired as exc:
+                            console.print(str(exc), style="yellow")
+
+                            confirmed = typer.confirm(
+                                "覆盖将删除目标目录及其全部原有内容，是否继续？",
+                                default=False,
+                            )
+
+                            if not confirmed:
+                                console.print("已取消知识库迁移，当前配置未更改。")
+                                raise typer.Exit() from None
+
+                            migrated_config = migrate_knowledge(
+                                config_file,
+                                path,
+                                overwrite=True,
+                            )
+
+                except MigrationError as exc:
+                    console.print(f"知识库迁移失败：{exc}", style="red")
+                    raise typer.Exit(code=1) from None
+
+                for warning in migration_warnings:
+                    console.print(
+                        f"迁移警告：{warning.message}",
+                        style="yellow",
+                    )
+
+                console.print(
+                    f"知识库迁移成功，新路径：{migrated_config.knowledge_path}",
+                    style="green",
+                )
                 raise typer.Exit()
 
             if platform is None and language is None:

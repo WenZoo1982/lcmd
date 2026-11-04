@@ -1,3 +1,4 @@
+import warnings
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -7,6 +8,11 @@ from typer.testing import CliRunner
 import lcmd.cli.app as cli_app
 from lcmd.cli.app import create_app
 from lcmd.core.config import AppConfig
+from lcmd.core.migration import (
+    MigrationCleanupWarning,
+    MigrationConfirmationRequired,
+    MigrationError,
+)
 from lcmd.knowledge.loader import KnowledgeLoadError
 
 runner = CliRunner()
@@ -40,14 +46,27 @@ def cli_mocks(monkeypatch, tmp_path):
     save = Mock()
     load = Mock(return_value=Mock(name="loaded_knowledge"))
 
+    migrate = Mock(
+        return_value=AppConfig(
+            knowledge_path=tmp_path / "new-knowledge",
+            platform="windows",
+            language="zh-CN",
+        )
+    )
+
     monkeypatch.setattr(cli_app, "initialize_state", initialize)
     monkeypatch.setattr(cli_app, "query_document", query)
     monkeypatch.setattr(cli_app, "render_query_result", render_query)
     monkeypatch.setattr(cli_app, "search_knowledge", search)
     monkeypatch.setattr(cli_app, "render_search_results", render_search)
-    monkeypatch.setattr(cli_app, "get_config_file", Mock(return_value=tmp_path / "config.toml"))
+    monkeypatch.setattr(
+        cli_app,
+        "get_config_file",
+        Mock(return_value=tmp_path / "config.toml"),
+    )
     monkeypatch.setattr(cli_app, "save_config", save)
     monkeypatch.setattr(cli_app, "load_knowledge", load)
+    monkeypatch.setattr(cli_app, "migrate_knowledge", migrate)
 
     return {
         "state": state,
@@ -58,6 +77,7 @@ def cli_mocks(monkeypatch, tmp_path):
         "render_search": render_search,
         "save": save,
         "load": load,
+        "migrate": migrate,
     }
 
 
@@ -81,8 +101,16 @@ def test_version_is_available(cli_mocks, monkeypatch):
         "get_config_file",
         Mock(return_value=Mock(is_file=Mock(return_value=False))),
     )
-    monkeypatch.setattr(cli_app, "get_default_knowledge_path", Mock(return_value=Mock()))
-    monkeypatch.setattr(cli_app, "discover_catalog", Mock(return_value=catalog))
+    monkeypatch.setattr(
+        cli_app,
+        "get_default_knowledge_path",
+        Mock(return_value=Mock()),
+    )
+    monkeypatch.setattr(
+        cli_app,
+        "discover_catalog",
+        Mock(return_value=catalog),
+    )
 
     result = runner.invoke(create_app(), ["--version"])
 
@@ -98,7 +126,11 @@ def test_version_shows_unavailable_knowledge_base(monkeypatch):
         "get_config_file",
         Mock(return_value=Mock(is_file=Mock(return_value=False))),
     )
-    monkeypatch.setattr(cli_app, "get_default_knowledge_path", Mock(return_value=Mock()))
+    monkeypatch.setattr(
+        cli_app,
+        "get_default_knowledge_path",
+        Mock(return_value=Mock()),
+    )
     monkeypatch.setattr(
         cli_app,
         "discover_catalog",
@@ -348,11 +380,124 @@ def test_configuration_options_require_config_entry(arguments, cli_mocks):
     cli_mocks["initialize"].assert_not_called()
 
 
-def test_path_is_recognized_but_migration_is_not_yet_connected(cli_mocks):
-    result = runner.invoke(create_app(), ["-c", "--path", "D:/KB"])
+def test_path_migration_succeeds(cli_mocks, tmp_path):
+    target_path = "D:/KB"
+    config_file = tmp_path / "config.toml"
+
+    result = runner.invoke(
+        create_app(),
+        ["-c", "--path", target_path],
+    )
 
     assert result.exit_code == 0
-    assert "知识库路径迁移功能尚未接入" in result.output
+    assert "迁移成功" in result.output
+
+    expected_path = str(tmp_path / "new-knowledge")
+    normalized_output = "".join(result.output.split())
+    normalized_path = "".join(expected_path.split())
+
+    assert normalized_path in normalized_output
+
+    cli_mocks["migrate"].assert_called_once_with(
+        config_file,
+        target_path,
+    )
+
+
+def test_path_migration_requires_confirmation_when_target_exists(
+    cli_mocks,
+    tmp_path,
+):
+    target_path = "D:/KB"
+    config_file = tmp_path / "config.toml"
+
+    cli_mocks["migrate"].side_effect = [
+        MigrationConfirmationRequired("目标目录已经存在"),
+        AppConfig(
+            knowledge_path=tmp_path / "new-knowledge",
+            platform="windows",
+            language="zh-CN",
+        ),
+    ]
+
+    result = runner.invoke(
+        create_app(),
+        ["-c", "--path", target_path],
+        input="y\n",
+    )
+
+    assert result.exit_code == 0
+    assert "目标目录已经存在" in result.output
+    assert "迁移成功" in result.output
+
+    assert cli_mocks["migrate"].call_count == 2
+    cli_mocks["migrate"].assert_any_call(
+        config_file,
+        target_path,
+    )
+    cli_mocks["migrate"].assert_any_call(
+        config_file,
+        target_path,
+        overwrite=True,
+    )
+
+
+def test_path_migration_can_be_cancelled(cli_mocks, tmp_path):
+    target_path = "D:/KB"
+    config_file = tmp_path / "config.toml"
+
+    cli_mocks["migrate"].side_effect = MigrationConfirmationRequired("目标目录已经存在")
+
+    result = runner.invoke(
+        create_app(),
+        ["-c", "--path", target_path],
+        input="n\n",
+    )
+
+    assert result.exit_code == 0
+    assert cli_mocks["migrate"].call_count == 1
+    cli_mocks["migrate"].assert_called_once_with(
+        config_file,
+        target_path,
+    )
+
+
+def test_path_migration_reports_migration_error(cli_mocks):
+    cli_mocks["migrate"].side_effect = MigrationError("迁移测试错误")
+
+    result = runner.invoke(
+        create_app(),
+        ["-c", "--path", "D:/KB"],
+    )
+
+    assert result.exit_code == 1
+    assert "迁移失败" in result.output
+    assert "迁移测试错误" in result.output
+
+
+def test_path_migration_displays_cleanup_warning(cli_mocks):
+    def migrate_with_warning(config_file, target_path, **kwargs):
+        warnings.warn(
+            "旧知识库目录未能完全清理",
+            MigrationCleanupWarning,
+            stacklevel=2,
+        )
+        return AppConfig(
+            knowledge_path=cli_mocks["state"].config.knowledge_path,
+            platform="windows",
+            language="zh-CN",
+        )
+
+    cli_mocks["migrate"].side_effect = migrate_with_warning
+
+    result = runner.invoke(
+        create_app(),
+        ["-c", "--path", "D:/KB"],
+    )
+
+    assert result.exit_code == 0
+    assert "迁移成功" in result.output
+    assert "旧知识库目录未能完全清理" in result.output
 
 
 def test_path_cannot_be_combined_with_platform_or_language(cli_mocks):
@@ -436,8 +581,16 @@ def test_initialize_state_reads_existing_config(tmp_path, monkeypatch):
     save_config = Mock()
 
     monkeypatch.setattr(cli_app, "load_config", load_config)
-    monkeypatch.setattr(cli_app, "discover_catalog", Mock(return_value=catalog))
-    monkeypatch.setattr(cli_app, "load_knowledge", Mock(return_value=knowledge))
+    monkeypatch.setattr(
+        cli_app,
+        "discover_catalog",
+        Mock(return_value=catalog),
+    )
+    monkeypatch.setattr(
+        cli_app,
+        "load_knowledge",
+        Mock(return_value=knowledge),
+    )
     monkeypatch.setattr(cli_app, "save_config", save_config)
 
     state = cli_app.initialize_state(config_file)
@@ -459,7 +612,11 @@ def test_initialize_state_returns_config_when_knowledge_unavailable(
         language="en-US",
     )
 
-    monkeypatch.setattr(cli_app, "load_config", Mock(return_value=config))
+    monkeypatch.setattr(
+        cli_app,
+        "load_config",
+        Mock(return_value=config),
+    )
     monkeypatch.setattr(
         cli_app,
         "discover_catalog",
@@ -473,7 +630,10 @@ def test_initialize_state_returns_config_when_knowledge_unavailable(
     assert state.knowledge is None
 
 
-def test_initialize_state_does_not_save_when_loading_fails(tmp_path, monkeypatch):
+def test_initialize_state_does_not_save_when_loading_fails(
+    tmp_path,
+    monkeypatch,
+):
     config_file = tmp_path / "config.toml"
     knowledge_path = tmp_path / "missing-kb"
     save_config = Mock()
@@ -509,17 +669,27 @@ def test_switch_platform_saves_after_success(tmp_path, monkeypatch):
     monkeypatch.setattr(cli_app, "load_knowledge", load)
     monkeypatch.setattr(cli_app, "save_config", save)
 
-    result = cli_app.switch_platform(state, "linux", tmp_path / "config.toml")
+    result = cli_app.switch_platform(
+        state,
+        "linux",
+        tmp_path / "config.toml",
+    )
 
     assert result.config.platform == "linux"
     assert result.config.language == "zh-CN"
     assert result.knowledge is new_knowledge
     assert state.config.platform == "windows"
     load.assert_called_once_with(state.catalog, "linux", "zh-CN")
-    save.assert_called_once_with(result.config, tmp_path / "config.toml")
+    save.assert_called_once_with(
+        result.config,
+        tmp_path / "config.toml",
+    )
 
 
-def test_switch_platform_does_not_save_when_loading_fails(tmp_path, monkeypatch):
+def test_switch_platform_does_not_save_when_loading_fails(
+    tmp_path,
+    monkeypatch,
+):
     state = cli_app.AppState(
         config=AppConfig(
             knowledge_path=tmp_path / "kb",
@@ -539,7 +709,11 @@ def test_switch_platform_does_not_save_when_loading_fails(tmp_path, monkeypatch)
     monkeypatch.setattr(cli_app, "save_config", save)
 
     with pytest.raises(KnowledgeLoadError):
-        cli_app.switch_platform(state, "linux", tmp_path / "config.toml")
+        cli_app.switch_platform(
+            state,
+            "linux",
+            tmp_path / "config.toml",
+        )
 
     assert state.config.platform == "windows"
     save.assert_not_called()
@@ -562,17 +736,27 @@ def test_switch_language_saves_after_success(tmp_path, monkeypatch):
     monkeypatch.setattr(cli_app, "load_knowledge", load)
     monkeypatch.setattr(cli_app, "save_config", save)
 
-    result = cli_app.switch_language(state, "en-US", tmp_path / "config.toml")
+    result = cli_app.switch_language(
+        state,
+        "en-US",
+        tmp_path / "config.toml",
+    )
 
     assert result.config.language == "en-US"
     assert result.config.platform == "windows"
     assert result.knowledge is new_knowledge
     assert state.config.language == "zh-CN"
     load.assert_called_once_with(state.catalog, "windows", "en-US")
-    save.assert_called_once_with(result.config, tmp_path / "config.toml")
+    save.assert_called_once_with(
+        result.config,
+        tmp_path / "config.toml",
+    )
 
 
-def test_switch_language_does_not_save_when_loading_fails(tmp_path, monkeypatch):
+def test_switch_language_does_not_save_when_loading_fails(
+    tmp_path,
+    monkeypatch,
+):
     state = cli_app.AppState(
         config=AppConfig(
             knowledge_path=tmp_path / "kb",
@@ -592,13 +776,20 @@ def test_switch_language_does_not_save_when_loading_fails(tmp_path, monkeypatch)
     monkeypatch.setattr(cli_app, "save_config", save)
 
     with pytest.raises(KnowledgeLoadError):
-        cli_app.switch_language(state, "en-US", tmp_path / "config.toml")
+        cli_app.switch_language(
+            state,
+            "en-US",
+            tmp_path / "config.toml",
+        )
 
     assert state.config.language == "zh-CN"
     save.assert_not_called()
 
 
-def test_switch_configuration_saves_once_for_combined_change(tmp_path, monkeypatch):
+def test_switch_configuration_saves_once_for_combined_change(
+    tmp_path,
+    monkeypatch,
+):
     state = cli_app.AppState(
         config=AppConfig(
             knowledge_path=tmp_path / "kb",
@@ -626,7 +817,10 @@ def test_switch_configuration_saves_once_for_combined_change(tmp_path, monkeypat
     assert result.config.language == "en-US"
     assert result.knowledge is knowledge
     load.assert_called_once_with(state.catalog, "linux", "en-US")
-    save.assert_called_once_with(result.config, tmp_path / "config.toml")
+    save.assert_called_once_with(
+        result.config,
+        tmp_path / "config.toml",
+    )
 
 
 def test_switch_configuration_does_not_save_when_final_combination_is_invalid(
