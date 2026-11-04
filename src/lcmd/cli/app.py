@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 import typer
 from rich.console import Console
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn
 from typer.core import TyperGroup
 
 from lcmd import __version__
@@ -369,36 +370,65 @@ def create_app() -> typer.Typer:
             if path is not None:
                 config_file = get_config_file()
 
-                try:
-                    with warnings.catch_warnings(record=True) as migration_warnings:
-                        warnings.simplefilter("always", MigrationCleanupWarning)
+                with Progress(
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    console=console,
+                ) as progress:
+                    task_id = progress.add_task("复制知识库", total=None)
 
-                        try:
-                            migrated_config = migrate_knowledge(
-                                config_file,
-                                path,
+                    def report_progress(
+                        copied_bytes: int,
+                        total_bytes: int,
+                    ) -> None:
+                        total = max(total_bytes, 1)
+                        completed = 1 if total_bytes == 0 else copied_bytes
+
+                        progress.update(
+                            task_id,
+                            total=total,
+                            completed=completed,
+                        )
+
+                    try:
+                        with warnings.catch_warnings(record=True) as migration_warnings:
+                            warnings.simplefilter(
+                                "always",
+                                MigrationCleanupWarning,
                             )
-                        except MigrationConfirmationRequired as exc:
-                            console.print(str(exc), style="yellow")
 
-                            confirmed = typer.confirm(
-                                "覆盖将删除目标目录及其全部原有内容，是否继续？",
-                                default=False,
-                            )
+                            try:
+                                migrated_config = migrate_knowledge(
+                                    config_file,
+                                    path,
+                                    progress_callback=report_progress,
+                                )
+                            except MigrationConfirmationRequired as exc:
+                                console.print(str(exc), style="yellow")
 
-                            if not confirmed:
-                                console.print("已取消知识库迁移，当前配置未更改。")
-                                raise typer.Exit() from None
+                                confirmed = typer.confirm(
+                                    "覆盖将删除目标目录及其全部原有内容，是否继续？",
+                                    default=False,
+                                )
 
-                            migrated_config = migrate_knowledge(
-                                config_file,
-                                path,
-                                overwrite=True,
-                            )
+                                if not confirmed:
+                                    console.print("已取消知识库迁移，当前配置未更改。")
+                                    raise typer.Exit() from None
 
-                except MigrationError as exc:
-                    console.print(f"知识库迁移失败：{exc}", style="red")
-                    raise typer.Exit(code=1) from None
+                                migrated_config = migrate_knowledge(
+                                    config_file,
+                                    path,
+                                    overwrite=True,
+                                    progress_callback=report_progress,
+                                )
+
+                    except MigrationError as exc:
+                        console.print(
+                            f"知识库迁移失败：{exc}",
+                            style="red",
+                        )
+                        raise typer.Exit(code=1) from None
 
                 for warning in migration_warnings:
                     console.print(

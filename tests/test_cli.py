@@ -398,10 +398,11 @@ def test_path_migration_succeeds(cli_mocks, tmp_path):
 
     assert normalized_path in normalized_output
 
-    cli_mocks["migrate"].assert_called_once_with(
-        config_file,
-        target_path,
-    )
+    cli_mocks["migrate"].assert_called_once()
+    call_args = cli_mocks["migrate"].call_args
+
+    assert call_args.args == (config_file, target_path)
+    assert callable(call_args.kwargs["progress_callback"])
 
 
 def test_path_migration_requires_confirmation_when_target_exists(
@@ -431,15 +432,14 @@ def test_path_migration_requires_confirmation_when_target_exists(
     assert "迁移成功" in result.output
 
     assert cli_mocks["migrate"].call_count == 2
-    cli_mocks["migrate"].assert_any_call(
-        config_file,
-        target_path,
-    )
-    cli_mocks["migrate"].assert_any_call(
-        config_file,
-        target_path,
-        overwrite=True,
-    )
+    calls = cli_mocks["migrate"].call_args_list
+
+    assert calls[0].args == (config_file, target_path)
+    assert callable(calls[0].kwargs["progress_callback"])
+
+    assert calls[1].args == (config_file, target_path)
+    assert calls[1].kwargs["overwrite"] is True
+    assert callable(calls[1].kwargs["progress_callback"])
 
 
 def test_path_migration_can_be_cancelled(cli_mocks, tmp_path):
@@ -456,10 +456,10 @@ def test_path_migration_can_be_cancelled(cli_mocks, tmp_path):
 
     assert result.exit_code == 0
     assert cli_mocks["migrate"].call_count == 1
-    cli_mocks["migrate"].assert_called_once_with(
-        config_file,
-        target_path,
-    )
+    call_args = cli_mocks["migrate"].call_args
+
+    assert call_args.args == (config_file, target_path)
+    assert callable(call_args.kwargs["progress_callback"])
 
 
 def test_path_migration_reports_migration_error(cli_mocks):
@@ -856,3 +856,33 @@ def test_switch_configuration_does_not_save_when_final_combination_is_invalid(
     assert state.config.platform == "windows"
     assert state.config.language == "zh-CN"
     save.assert_not_called()
+
+
+def test_path_migration_progress_callback_is_executed(cli_mocks):
+    def migrate_with_progress(
+        config_file,
+        target_path,
+        *,
+        progress_callback=None,
+        **kwargs,
+    ):
+        assert callable(progress_callback)
+
+        progress_callback(50, 100)
+        progress_callback(100, 100)
+
+        return AppConfig(
+            knowledge_path=cli_mocks["state"].config.knowledge_path,
+            platform="windows",
+            language="zh-CN",
+        )
+
+    cli_mocks["migrate"].side_effect = migrate_with_progress
+
+    result = runner.invoke(
+        create_app(),
+        ["-c", "--path", "D:/KB"],
+    )
+
+    assert result.exit_code == 0
+    assert "迁移成功" in result.output
