@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新 CLI 配置入口提交 `dc192a8268eb2f3ddbbac52c26e6e896d1121a98`；迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1“CLI 参数与命令结构调整”已完成并提交；路径安全及迁移核心模块已实现并通过自动化测试。阶段一任务 2“将 --path 接入迁移流程”和任务 3“启动时接入迁移恢复”尚未完成
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`（`feat: connect knowledge path migration to CLI`）；此前 CLI 配置入口提交 `dc192a8268eb2f3ddbbac52c26e6e896d1121a98`，迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1“CLI 参数与命令结构调整”已完成；任务 2 已将 `--path` 接入迁移核心，并实现覆盖确认、迁移错误和清理警告处理。**CLI 百分比进度显示尚未接入**；任务 3“启动时接入迁移恢复”仍待完成
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（本轮 Windows 实际测试输出）
 
@@ -335,7 +335,7 @@ src/lcmd/
 | `lcmd -c --platform linux` / `lcmd -c -p linux` | 验证并切换平台，成功后持久化 |
 | `lcmd -c --language en-US` / `lcmd -c -l en-US` | 验证并切换语言，成功后持久化 |
 | `lcmd -c -p linux -l zh-CN` | 验证最终平台/语言组合后一次性保存配置 |
-| `lcmd -c --path <目录>` | 当前仅识别参数并提示迁移功能尚未接入；尚不能执行迁移 |
+| `lcmd -c --path <目录>` | 调用 `migrate_knowledge()` 迁移知识库；目标已存在时询问是否覆盖，显示迁移成功/失败及旧目录清理警告；当前尚无百分比进度显示 |
 | `lcmd --update` / `-u` | 当前仅提示知识库更新功能尚未实现 |
 | `lcmd <command>` | 查询当前平台/语言的知识文档 |
 | `lcmd <tool>` | 显示工具入口页和可用子命令；无入口页时按单篇/多篇规则处理 |
@@ -347,7 +347,7 @@ src/lcmd/
 
 当前仍未实现：
 
-- `--path` 对接真实知识库迁移事务和覆盖确认/进度显示。
+- CLI 迁移过程的百分比进度显示（迁移核心已提供 `progress_callback`，但 `cli/app.py` 尚未传入回调）。
 - 启动时自动调用 `recover_migration()` 完成中断迁移的安全恢复。
 - `--update` 对应的在线检查、下载和更新机制。
 - 最终完整帮助文档；当前帮助仍由 Typer 根据参数定义生成。
@@ -439,13 +439,14 @@ language = "zh-CN"
 - 切换 platform/language 时保留现有知识库路径。
 - `--version` 单独读取配置和 Manifest 版本，不加载 Markdown 文档，也不创建或写入配置。
 
-### 5.3 当前未实现的路径能力
+### 5.3 当前路径管理能力与剩余限制
 
-- 当前没有 CLI 命令或选项让用户指定、查看或修改知识库路径。
-- `AppConfig.knowledge_path` 和配置文件中的 `path` 已存在，内部配置机制能够保存自定义路径；但这不等于用户已有受支持的 CLI 配置入口。
-- 当前没有安装器负责把知识库部署到默认数据目录。
-- 当前没有知识库更新器、备份机制、用户自定义文档迁移或回滚机制。
-- 不要把手动编辑配置文件描述为已完成的产品化路径管理功能。
+- 用户可通过 `lcmd -c` 查看当前知识库路径，通过 `lcmd -c --path <目录>` 执行知识库迁移。
+- CLI 调用 `migrate_knowledge()`，目标目录已存在时通过交互确认后才以 `overwrite=True` 重试；用户拒绝时取消迁移，不改动配置。
+- 迁移失败会显示错误并以退出码 1 退出；旧知识库清理警告会显示给用户，但迁移仍报告成功。
+- 迁移核心支持 `progress_callback`，当前 CLI 尚未接入百分比进度展示。
+- 当前没有安装器负责把知识库部署到默认数据目录，也没有独立的备份、回滚或恢复默认路径功能。
+- `recover_migration()` 尚未接入启动流程；不得把迁移日志恢复描述为启动时自动执行。
 
 ## 6. 当前已完成测试与验收
 
@@ -499,17 +500,35 @@ language = "zh-CN"
 
 分页实测时第一页提示“按 Enter 查看下一页，按 Q 退出”；本轮实际观察到 Enter 进入第二页并正确显示第 6 条。Q 退出分支由代码实现，但本轮记录不把它标记为本轮实际按键验收。
 
-### 6.3 本轮未单独复测的内容
+### 6.3 Windows 11 CLI 迁移集成自动化检查（提交 `7024d8d`）
 
-本轮 Windows CLI 测试没有重新执行 pytest/Ruff；自动化检查记录来自此前 Linux VM 的 187 项测试和静态检查。后续若修改程序代码，必须重新执行相关自动化测试。配置文件损坏、无效路径、manifest 错误、符号链接攻击等边界场景有自动化测试覆盖，但本轮没有逐项进行人工破坏性测试。
+用户在 Windows 11、Python 3.14.10 环境中，对 `D:\Project_DEV\lcmd` 执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/test_cli.py -q
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\ruff.exe check .
+.\.venv\Scripts\ruff.exe format --check .
+git diff --check
+```
+
+结果：
+
+- CLI 定向测试：51 passed
+- 全量测试：251 passed
+- Ruff lint：All checks passed
+- Ruff format：32 files already formatted
+- `git diff --check`：通过
+
+本轮 CLI 测试覆盖迁移函数调用、目标存在时确认覆盖、用户取消、迁移异常和旧目录清理警告。CLI 测试通过 Mock 验证与迁移核心 API 的调用契约；迁移文件复制、SHA-256 校验、配置切换和恢复边界由 `tests/test_migration.py` 等核心模块测试覆盖。**本轮没有进行真实磁盘路径的人工迁移 CLI 验收**。此外，当前 CLI 尚未把 `progress_callback` 接入百分比进度展示。
 
 ---
 
 ## 7. 当前仓库与同步基线
 
-截至本次实现说明整理时，GitHub 主程序仓库 `main` 分支已包含文档同步提交 `1d565d96d59b00e0559485db4fea4daa7cc03323`。该提交是本次源码审查和文档补充的基线。用户随后已在 Windows 本地执行 `git pull --ff-only origin main`，终端显示从 `d2b40a5` Fast-forward 到 `1d565d9`，仅更新 `LCMD-DEV.md`。
+主程序 `main` 分支当前代码提交为 `7024d8d78fee4364a36b0836d2a1187606b92e0f`（`feat: connect knowledge path migration to CLI`），用户已在 Windows 本地完成该提交的 commit 和 push。当前远程 `LCMD-DEV.md` 仍需本次文档同步提交；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
 
-此前 Linux VM 自动化测试基线为主程序 `d2b40a5`、知识库 `4ad7071`；本次文档更新不改变程序代码，因此不能将旧测试结果误写为对新代码的重新测试。今后开始新工作仍需重新检查远程与本地状态。
+本轮代码提交只修改 `src/lcmd/cli/app.py` 和 `tests/test_cli.py`，没有修改迁移核心模块。用户在 Windows 11、Python 3.14.10 环境中执行全量测试 251 passed，Ruff lint、Ruff format 和 `git diff --check` 均通过。以上是提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f` 对应代码的实际验证结果；本轮未进行真实磁盘路径的人工迁移 CLI 验收。
 
 ---
 
@@ -522,12 +541,12 @@ language = "zh-CN"
 **阶段一进度：**
 
 - **已完成——任务 1：CLI 参数与命令结构调整。** 配置查看、平台/语言查看与切换、组合切换、`--update/-u` 占位提示、动态查询命令结构已实现并提交。
-- **任务 2：将 `--path` 接入 `migrate_knowledge()`。** 待开始；当前 `--path` 只显示“知识库路径迁移功能尚未接入”。
-- **任务 3：启动时接入 `recover_migration()`。** 待任务 2 完成后实施。
+- **任务 2：将 `--path` 接入 `migrate_knowledge()`。** 已完成迁移 API 调用、目标存在时覆盖确认、用户取消、迁移错误处理及清理警告展示；代码提交为 `7024d8d78fee4364a36b0836d2a1187606b92e0f`。Windows CLI 定向测试 51 passed、全量测试 251 passed，Ruff lint/format 和 `git diff --check` 均通过。**CLI 百分比进度显示仍未接入**，因此阶段一任务 2 尚有这一项待完成。
+- **任务 3：启动时接入 `recover_migration()`。** 尚未开始；需先处理并验收任务 2 剩余的进度显示，再接入启动恢复。
 
-任务 1 提交：`dc192a8268eb2f3ddbbac52c26e6e896d1121a98`。Windows 验证：CLI 定向测试 47 passed、全量测试 247 passed、Ruff lint 通过、Ruff format 检查通过（32 files already formatted）、`git diff --check` 通过。以上为用户在该提交前后的本机实际测试结果；尚未完成 `--path` 迁移 CLI 和启动恢复的人工验收。
+任务 1 提交：`dc192a8268eb2f3ddbbac52c26e6e896d1121a98`。任务 2 当前提交：`7024d8d78fee4364a36b0836d2a1187606b92e0f`。本轮自动化测试不等同于真实磁盘路径的人工 CLI 迁移验收。
 
-**尚未实现：** 完整知识库路径迁移 CLI 与启动恢复、Windows 安装包与安装初始化、主程序/知识库更新机制，以及最终完整帮助信息。以下内容是用户已确认的产品行为和开发约束，不代表代码已经实现。
+**尚未实现：** CLI 迁移百分比进度显示、启动恢复、Windows 安装包与安装初始化、主程序/知识库更新机制，以及最终完整帮助信息。以下内容是用户已确认的产品行为和开发约束，不代表代码已经实现。
 
 ### 8.2 知识库与配置文件职责（已确认）
 
@@ -633,21 +652,23 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 当前实现落实的关键行为：
 
 - 目标路径是知识库根目录，不追加子目录；目标已存在时默认要求调用方明确传入覆盖确认。
-- 复制阶段报告已复制字节和总字节，调用方可据此显示百分比；总大小只用于进度，不作为完整性校验条件。
+- 复制阶段通过可选 `progress_callback` 报告已复制字节和总字节；总大小只用于进度，不作为完整性校验条件。
 - 完整性检查比较相对路径文件清单、SHA-256 和目录清单；扫描时拒绝符号链接、重解析点和特殊文件。
 - 配置使用现有 `save_config()` 原子保存；只有复制和验证成功后才切换路径，平台和语言保持不变。
 - 旧目录清理是尽力操作。清理失败时迁移仍成功，发出 `MigrationCleanupWarning` 并保留迁移日志。
 - 迁移日志独立保存旧/新路径、源目录身份及原始文件清单；恢复时先确认当前配置指向的新知识库有效，再验证旧目录身份和剩余内容，避免误删当前知识库或被替换的目录。
 - 若配置缺失、日志损坏、目录身份不符或源目录出现非预期内容，恢复逻辑拒绝自动删除。
 
-当前状态：
+当前 CLI 接入状态（提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`）：
 
 - `cli/app.py` 已接入 `--config/-c`、`--platform/-p`、`--language/-l` 的配置查看和切换；平台与语言组合先验证最终组合，再只保存一次配置。
-- `--path` 参数已注册并受配置模式约束，但目前只输出“知识库路径迁移功能尚未接入”，尚未调用 `migrate_knowledge()`。
-- `--update/-u` 仅为占位提示，不包含更新机制。
+- `lcmd -c --path <目录>` 已调用 `migrate_knowledge(config_file, path)`。首次调用不覆盖；遇到 `MigrationConfirmationRequired` 后通过 `typer.confirm()` 询问，用户确认才以 `overwrite=True` 重试，拒绝则取消。
+- CLI 捕获 `MigrationError` 并以退出码 1 结束；捕获 `MigrationCleanupWarning` 并显示警告，迁移仍显示成功。
+- **进度显示尚未接入：** CLI 当前没有向 `migrate_knowledge()` 传入 `progress_callback`，因此终端不会显示复制百分比。
+- `--update/-u` 仍仅为占位提示，不包含更新机制。
 - `recover_migration()` 尚未接入程序启动流程。
 
-因此阶段一尚未完成；下一步只推进 `--path` 迁移接入，完成后再处理启动恢复。不得提前推进安装包、更新机制或完整帮助开发。
+阶段一任务 2 的迁移调用、覆盖确认和错误/警告处理已实现并通过自动化测试；百分比进度展示仍是任务 2 的剩余事项。完成该项后，再处理任务 3 启动恢复。不得提前推进安装包、更新机制或完整帮助开发。
 
 ### 8.5 Windows 安装包与首次初始化（已确认的产品方向，尚未实现）
 
@@ -667,7 +688,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 
 当前确定的开发推进顺序：
 
-1. **阶段一：自定义知识库路径与迁移。** 路径安全检查与迁移核心模块已实现；CLI 配置入口和平台/语言切换已完成。剩余任务依次为：将 `--path` 接入 `migrate_knowledge()`（包括覆盖确认、进度显示和失败保护），再在程序启动流程接入 `recover_migration()`。
+1. **阶段一：自定义知识库路径与迁移。** 路径安全检查、迁移核心模块以及 `--path` 的迁移调用、覆盖确认、错误/警告处理已实现。当前剩余任务依次为：将 `progress_callback` 接入 CLI 并显示迁移百分比；随后在程序启动流程接入 `recover_migration()`。
 2. **阶段二：Windows 安装包与初始化。** 安装主程序并默认携带官方知识库，处理已有目录、覆盖确认、自定义安装位置和首次配置。
 3. **阶段三：更新机制。** 设计并实现主程序/知识库独立更新能力，提供 `--update` / `-u`。
 4. **阶段四：完整 CLI 帮助。** 将最终参数、短参数、组合约束、错误示例和使用示例整理进 `--help`。
@@ -719,7 +740,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 | 配置文件 | platformdirs 用户配置目录下 config.toml |
 | 默认知识库路径 | platformdirs 用户数据目录下 knowledge |
 | 配置字段 | [knowledge] path、platform、language，三者均为必需字段 |
-| 自定义路径 | 已确认 CLI 参数与迁移规则；尚未实现 |
+| 自定义路径 | `-c --path <目录>` 已接入迁移 API；覆盖确认、错误和清理警告已处理；CLI 百分比进度及启动恢复尚未实现 |
 | 搜索分页 | 每页 5 条；交互终端自动分页 |
 | 在线更新 | 已确认未来提供 --update/-u；更新机制未设计/实现 |
 | 安装包 | 已确认 Windows 安装默认携带官方知识库；安装包未实现 |
@@ -780,9 +801,9 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 | `switch_language(state, language, config_file)` | 要求已有 catalog；先加载当前平台/新语言，再保存配置；成功后返回新 AppState。 |
 | `_show_platforms()` / `_show_languages()` | 展示当前选择和 catalog 实际发现的可用值；catalog 不可用或平台不存在时显示提示。 |
 | `_show_version()` | 显示程序版本；只读取配置和发现 Manifest/catalog 版本，不加载 Markdown 文档，也不写配置。 |
-| `create_app()` | 注册 Typer 应用、根 callback 和 search/platform/language 命令；动态查询在根 callback 中处理。 |
+| `create_app()` | 注册 Typer 应用、根 callback 和 search/platform/language 命令；动态查询在根 callback 中处理；配置模式下的 `--path` 调用迁移 API 并处理覆盖确认、迁移错误和清理警告。 |
 
-根 callback 的执行顺序是：若指定 `--version`，先走版本专用路径并退出；否则初始化 AppState 并放入根 Context；若解析器记录了动态参数，则要求 knowledge 可用，调用 `query_document()` 和 `render_query_result()` 后退出；否则由 Typer 调用注册的 search/platform/language 命令。没有子命令时显示帮助。
+根 callback 的执行顺序是：若指定 `--version`，先走版本专用路径并退出；否则初始化 AppState 并放入根 Context。配置模式下若指定 `--path`，调用 `migrate_knowledge()`；目标已存在时捕获 `MigrationConfirmationRequired` 并请求用户确认，确认后以 `overwrite=True` 重试，取消则退出；迁移错误显示原因并以退出码 1 退出，清理警告会显示但不阻止成功结果。当前 CLI 尚未传入迁移进度回调。若解析器记录了动态参数，则要求 knowledge 可用，调用 `query_document()` 和 `render_query_result()` 后退出；否则由 Typer 调用注册的 search/platform/language 命令。没有子命令时显示帮助。
 
 search 命令把多个 keyword 参数用空格连接成一个字符串，调用 `search_knowledge()`，再调用 `render_search_results()`。platform/language 无参数时显示可用值；有参数时调用对应 switch 函数。切换失败时 CLI 显示失败提示并以退出码 1 退出。
 
@@ -883,7 +904,7 @@ Parser 和 Validator 有意分工：Parser 不因 summary 缺失或正文分隔�
 
 迁移日志文件名为 `.lcmd-migration.json`，位于配置文件所在目录。日志包含 source、target、state、source_identity 和 source_manifest。源目录身份用于拒绝清理被替换的目录；源清单保留文件 SHA-256 与目录相对路径，以支持部分删除后的安全恢复。旧目录清理失败时保留日志。
 
-`migrate_knowledge()` 与 `recover_migration()` 当前是独立核心 API，不代表 CLI 已可调用；启动恢复、交互确认和进度 UI 必须在后续 CLI 接入任务中实现。
+`migrate_knowledge()` 已由 CLI 的 `-c --path <目录>` 调用；覆盖确认、迁移异常和清理警告均已接入。核心 API 的 `progress_callback` 尚未由 CLI 使用，因此百分比进度 UI 仍待实现。`recover_migration()` 仍未接入启动流程。
 
 ### 13.8 终端渲染：`output/renderer.py`
 
@@ -914,8 +935,15 @@ console script / python -m lcmd
        -> load_knowledge(catalog, platform, language)
        -> 首次成功时 save_config()
   -> AppState 放入 ctx.obj
-  -> 分发注册命令或动态知识查询
+  -> 根据程序级参数分发
+       -> -c --path <目录>
+            -> migrate_knowledge(config_file, target_path)
+            -> 若目标存在：请求确认；确认后 overwrite=True 重试
+            -> 显示迁移成功、迁移失败或旧目录清理警告
+       -> 其他配置、search、动态知识查询
 ```
+
+当前启动流程**尚未**调用 `recover_migration()`；启动恢复是阶段一任务 3。迁移 CLI 当前也没有向核心函数传入 `progress_callback`，因此尚无百分比进度显示。
 
 注意两个不同的失败路径：
 
@@ -982,7 +1010,7 @@ language 切换流程相同，只替换 language 字段。两种切换均先加�
 
 | 测试文件 | 主要覆盖范围 | 测试数量（当前源码） |
 |---|---|---:|
-| `tests/test_cli.py` | 帮助、版本、动态查询、search/platform/language、初始化和切换保存时序 | 28 |
+| `tests/test_cli.py` | 帮助、版本、动态查询、search/platform/language、初始化/切换，以及迁移调用、覆盖确认、取消、异常和清理警告 | 51（本轮 pytest 收集） |
 | `tests/test_config.py` | 默认值、TOML 读写、字段校验、原子保存失败保护 | 17 |
 | `tests/test_loader.py` | Manifest、目录发现、路径命名、平台/语言选择、文档隔离、符号链接和冲突 | 26 |
 | `tests/test_models.py` | 数据模型字段、归属约束、不可变和 slots | 12 |
@@ -993,7 +1021,7 @@ language 切换流程相同，只替换 language 字段。两种切换均先加�
 | `tests/test_validator.py` | summary、正文分隔线、空正文、CRLF 和非修改性 | 19 |
 | `tests/test_paths.py` | platformdirs 路径、Path 类型、默认路径不创建目录 | 6 |
 
-以上当前列出的测试函数合计 167 项。Linux 历史运行记录为 187 passed；两者数字不一致，说明测试文件可能还有参数化用例或其他收集项。**实际测试总数以重新运行 pytest 的收集结果为准**，不要把测试函数数量等同于 pytest 收集数量。
+表中其他测试数量为此前的源码函数统计，不代表当前 pytest 收集总数。Windows 本轮 `tests/test_cli.py` 收集并通过 51 项，全量 pytest 收集并通过 251 项。**实际测试总数以每次重新运行 pytest 的结果为准**，不要把测试函数数量等同于 pytest 收集数量。
 
 测试证据分层：
 
@@ -1012,25 +1040,25 @@ language 切换流程相同，只替换 language 字段。两种切换均先加�
 .\.venv\Scripts\python.exe -m pytest tests/test_migration.py -v
 ```
 
-结果：18 passed。随后执行项目级检查：
+结果：18 passed。随后执行项目级检查，结果为 pytest 228 passed、Ruff lint 通过、Ruff format 32 files already formatted。
+
+本轮新增 4 个文件：`migration.py`、`path_security.py`、`test_migration.py`、`test_path_security.py`。迁移定向测试覆盖覆盖确认、复制/完整性/配置保存失败保护、旧目录清理失败、日志恢复、目录身份替换检测、部分删除恢复、非预期文件拒绝及配置缺失提示等行为。
+
+### 6.4 Windows 11 CLI 迁移集成自动化检查（提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`）
+
+用户在 Windows 11、Python 3.14.10 环境中实际执行：
 
 ```powershell
+.\.venv\Scripts\python.exe -m pytest tests/test_cli.py -q
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\ruff.exe check .
 .\.venv\Scripts\ruff.exe format --check .
+git diff --check
 ```
 
-结果：
+结果：CLI 定向测试 51 passed；全量测试 251 passed；Ruff lint 通过；Ruff format 为 32 files already formatted；`git diff --check` 通过。
 
-- pytest：228 passed（2.91s）
-- Ruff lint：All checks passed
-- Ruff format：32 files already formatted
-
-本轮新增 4 个文件：`migration.py`、`path_security.py`、`test_migration.py`、`test_path_security.py`。迁移定向测试覆盖覆盖确认、复制/完整性/配置保存失败保护、旧目录清理失败、日志恢复、目录身份替换检测、部分删除恢复、非预期文件拒绝及配置缺失提示等行为。以上是自动化测试证据，不代表已完成 CLI 交互或 Windows 人工迁移流程验收。
-
-### 6.4 本轮未单独复测的内容
-
-本轮 Windows CLI 测试没有重新执行 pytest/Ruff；自动化检查记录来自此前 Linux VM 的 187 项测试和静态检查。后续若修改程序代码，必须重新执行相关自动化测试。配置文件损坏、无效路径、manifest 错误、符号链接攻击等边界场景有自动化测试覆盖，但本轮没有逐项进行人工破坏性测试。
+CLI 测试通过 Mock 验证迁移 API 调用、覆盖确认、取消、迁移错误和清理警告的命令层行为。迁移核心的文件复制、SHA-256 完整性检查、配置切换和恢复边界由核心模块测试覆盖。本轮没有进行真实磁盘路径的人工迁移 CLI 验收。CLI 尚未传入 `progress_callback`，百分比进度显示仍待实现。
 
 ## 16. 新功能开发前的代码定位规则
 
