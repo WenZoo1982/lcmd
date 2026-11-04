@@ -803,7 +803,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 | `_show_version()` | 显示程序版本；只读取配置和发现 Manifest/catalog 版本，不加载 Markdown 文档，也不写配置。 |
 | `create_app()` | 注册 Typer 应用、根 callback 和 search/platform/language 命令；动态查询在根 callback 中处理；配置模式下的 `--path` 调用迁移 API 并处理覆盖确认、迁移错误和清理警告。 |
 
-根 callback 的执行顺序是：若指定 `--version`，先走版本专用路径并退出；否则初始化 AppState 并放入根 Context。配置模式下若指定 `--path`，调用 `migrate_knowledge()`；目标已存在时捕获 `MigrationConfirmationRequired` 并请求用户确认，确认后以 `overwrite=True` 重试，取消则退出；迁移错误显示原因并以退出码 1 退出，清理警告会显示但不阻止成功结果。当前 CLI 尚未传入迁移进度回调。若解析器记录了动态参数，则要求 knowledge 可用，调用 `query_document()` 和 `render_query_result()` 后退出；否则由 Typer 调用注册的 search/platform/language 命令。没有子命令时显示帮助。
+根 callback 的执行顺序是：若指定 `--version`，先走版本专用路径并退出；否则初始化 AppState 并放入根 Context。配置模式下若指定 `--path`，调用 `migrate_knowledge()` 并传入进度回调；Rich 显示复制阶段的字节百分比进度。目标已存在时捕获 `MigrationConfirmationRequired` 并请求用户确认，确认后以 `overwrite=True` 重试且继续传入进度回调，取消则退出；迁移错误显示原因并以退出码 1 退出，清理警告会显示但不阻止成功结果。若解析器记录了动态参数，则要求 knowledge 可用，调用 `query_document()` 和 `render_query_result()` 后退出；否则由 Typer 调用注册的 search/platform/language 命令。没有子命令时显示帮助。
 
 search 命令把多个 keyword 参数用空格连接成一个字符串，调用 `search_knowledge()`，再调用 `render_search_results()`。platform/language 无参数时显示可用值；有参数时调用对应 switch 函数。切换失败时 CLI 显示失败提示并以退出码 1 退出。
 
