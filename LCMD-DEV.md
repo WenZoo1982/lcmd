@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `6ad27f3`（`feat: display knowledge migration progress`）；此前 CLI 迁移接入提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`，CLI 配置入口提交 `dc192a8268eb2f3ddbbac52c26e6e896d1121a98`，迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1“CLI 参数与命令结构调整”已完成；阶段一任务 2“知识库路径迁移 CLI 集成”已完成，包括 `--path` 迁移、覆盖确认、错误/清理警告处理及复制字节百分比进度显示；任务 3“启动时接入迁移恢复”仍待完成
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `1f28b23`（`feat: recover interrupted knowledge migrations on startup`）；此前迁移进度显示提交 `6ad27f3`、CLI 迁移接入提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`、CLI 配置入口提交 `dc192a8268eb2f3ddbbac52c26e6e896d1121a98`，迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1“CLI 参数与命令结构调整”、任务 2“知识库路径迁移 CLI 集成”和任务 3“启动时接入迁移恢复”均已完成。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（本轮 Windows 实际测试输出）
 
@@ -348,7 +348,6 @@ src/lcmd/
 当前仍未实现：
 
 
-- 启动时自动调用 `recover_migration()` 完成中断迁移的安全恢复。
 - `--update` 对应的在线检查、下载和更新机制。
 - 最终完整帮助文档；当前帮助仍由 Typer 根据参数定义生成。
 - 系统命令执行、系统命令安装检测或在线搜索功能。
@@ -446,7 +445,7 @@ language = "zh-CN"
 - 迁移失败会显示错误并以退出码 1 退出；旧知识库清理警告会显示给用户，但迁移仍报告成功。
 - CLI 使用 Rich 进度条显示知识库文件复制的字节百分比；该进度仅覆盖复制阶段，不代表完整性校验、配置切换和旧目录清理的整体进度。
 - 当前没有安装器负责把知识库部署到默认数据目录，也没有独立的备份、回滚或恢复默认路径功能。
-- `recover_migration()` 尚未接入启动流程；不得把迁移日志恢复描述为启动时自动执行。
+- `recover_migration()` 已接入启动流程；启动时先执行迁移恢复，再读取配置和初始化知识库。
 
 ## 6. 当前已完成测试与验收
 
@@ -542,11 +541,11 @@ git diff --check
 
 - **已完成——任务 1：CLI 参数与命令结构调整。** 配置查看、平台/语言查看与切换、组合切换、`--update/-u` 占位提示、动态查询命令结构已实现并提交。
 - **已完成——任务 2：知识库路径迁移 CLI 集成。** `--path` 已接入 `migrate_knowledge()`，覆盖确认、用户取消、迁移错误、清理警告及 Rich 复制字节百分比进度均已实现；代码提交 `7024d8d` 完成主体集成，`6ad27f3` 完成进度显示。Windows CLI 定向测试 52 passed、全量测试 252 passed，Ruff lint/format 和 `git diff --check` 均通过。进度百分比仅覆盖文件复制阶段，不代表完整迁移流程。
-- **任务 3：启动时接入 `recover_migration()`。** 尚未开始；这是阶段一当前下一项任务。
+- **已完成——任务 3：启动时接入 `recover_migration()`。** `initialize_state()` 在读取配置前调用恢复函数；恢复异常会阻止后续初始化，并由根 CLI 显示具体错误、以退出码 1 退出。
 
-任务 1 提交：`dc192a8268eb2f3ddbbac52c26e6e896d1121a98`。任务 2 最近提交：`6ad27f3`。本轮自动化测试不等同于真实磁盘路径的人工 CLI 迁移验收。
+任务 1 提交：`dc192a8268eb2f3ddbbac52c26e6e896d1121a98`。任务 2 最近提交：`6ad27f3`。任务 3 提交：`1f28b23`。本轮启动恢复通过自动化测试验证；未进行真实迁移日志/磁盘清理的人工故障注入验收。
 
-**尚未实现：** 启动恢复、Windows 安装包与安装初始化、主程序/知识库更新机制，以及最终完整帮助信息。以下内容是用户已确认的产品行为和开发约束，不代表代码已经实现。
+**尚未实现：** Windows 安装包与安装初始化、主程序/知识库更新机制，以及最终完整帮助信息。以下内容是用户已确认的产品行为和开发约束，不代表代码已经实现。
 
 ### 8.2 知识库与配置文件职责（已确认）
 
@@ -666,9 +665,9 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 - CLI 捕获 `MigrationError` 并以退出码 1 结束；捕获 `MigrationCleanupWarning` 并显示警告，迁移仍显示成功。
 - Rich CLI 已通过 `progress_callback` 显示复制字节百分比；该进度只覆盖文件复制阶段，不代表完整性校验、配置切换和旧目录清理的整体进度。
 - `--update/-u` 仍仅为占位提示，不包含更新机制。
-- `recover_migration()` 尚未接入程序启动流程。
+- `recover_migration()` 已接入程序启动流程。
 
-阶段一任务 2 的迁移调用、覆盖确认、错误/警告处理和复制字节百分比进度均已实现并通过自动化测试。阶段一下一项任务是任务 3：在程序启动流程接入 `recover_migration()`。不得提前推进安装包、更新机制或完整帮助开发。
+阶段一任务 1、任务 2 和任务 3 均已完成。任务 3 将迁移恢复接入启动初始化流程；安装包、更新机制和完整帮助仍属于后续独立工作，不应在没有重新核对路线图和当前代码前提前推进。
 
 ### 8.5 Windows 安装包与首次初始化（已确认的产品方向，尚未实现）
 
@@ -740,7 +739,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 | 配置文件 | platformdirs 用户配置目录下 config.toml |
 | 默认知识库路径 | platformdirs 用户数据目录下 knowledge |
 | 配置字段 | [knowledge] path、platform、language，三者均为必需字段 |
-| 自定义路径 | `-c --path <目录>` 已接入迁移 API；覆盖确认、错误、清理警告和复制字节百分比进度已实现；启动恢复尚未实现 |
+| 自定义路径 | `-c --path <目录>` 已接入迁移 API；覆盖确认、错误、清理警告、复制字节百分比进度及启动恢复均已实现 |
 | 搜索分页 | 每页 5 条；交互终端自动分页 |
 | 在线更新 | 已确认未来提供 --update/-u；更新机制未设计/实现 |
 | 安装包 | 已确认 Windows 安装默认携带官方知识库；安装包未实现 |
@@ -904,7 +903,7 @@ Parser 和 Validator 有意分工：Parser 不因 summary 缺失或正文分隔�
 
 迁移日志文件名为 `.lcmd-migration.json`，位于配置文件所在目录。日志包含 source、target、state、source_identity 和 source_manifest。源目录身份用于拒绝清理被替换的目录；源清单保留文件 SHA-256 与目录相对路径，以支持部分删除后的安全恢复。旧目录清理失败时保留日志。
 
-`migrate_knowledge()` 已由 CLI 的 `-c --path <目录>` 调用；覆盖确认、迁移异常、清理警告和 Rich 复制字节百分比进度均已接入。进度回调只覆盖文件复制阶段。`recover_migration()` 仍未接入启动流程。
+`migrate_knowledge()` 已由 CLI 的 `-c --path <目录>` 调用；覆盖确认、迁移异常、清理警告和 Rich 复制字节百分比进度均已接入。进度回调只覆盖文件复制阶段。`recover_migration()` 已在 `initialize_state()` 中接入，启动时先恢复迁移，再读取配置和加载知识库。
 
 ### 13.8 终端渲染：`output/renderer.py`
 
@@ -930,6 +929,7 @@ console script / python -m lcmd
   -> create_app()
   -> Typer 根 callback
   -> initialize_state()
+       -> recover_migration(config_file)
        -> load_config() 或创建默认 AppConfig
        -> discover_catalog(knowledge_path)
        -> load_knowledge(catalog, platform, language)
@@ -944,7 +944,7 @@ console script / python -m lcmd
        -> 其他配置、search、动态知识查询
 ```
 
-当前启动流程**尚未**调用 `recover_migration()`；启动恢复是阶段一任务 3。迁移 CLI 已向核心函数传入 `progress_callback`，并显示复制阶段的字节百分比进度。
+当前启动流程会先调用 `recover_migration(config_file)`，再读取配置和发现/加载知识库。若恢复失败并抛出 `MigrationError`，根 callback 显示“知识库迁移恢复失败”及具体原因，以退出码 1 结束；不会继续读取配置或扫描知识库。调用时保留 `protected_paths=None` 默认行为，使核心路径安全模块继续应用默认受保护目录规则。迁移 CLI 已向核心函数传入 `progress_callback`，并显示复制阶段的字节百分比进度。
 
 注意两个不同的失败路径：
 
@@ -1060,6 +1060,26 @@ git diff --check
 结果：CLI 定向测试 52 passed；全量测试 252 passed；Ruff lint 通过；Ruff format 为 32 files already formatted；`git diff --check` 通过。
 
 CLI 测试通过 Mock 验证迁移 API 调用、覆盖确认、取消、迁移错误、清理警告及进度回调传递和执行。迁移核心的文件复制、SHA-256 完整性检查、配置切换和恢复边界由核心模块测试覆盖。本轮没有进行真实磁盘路径的人工迁移 CLI 验收。Rich 进度条显示复制阶段的字节百分比，不代表完整迁移流程。
+
+### 6.5 Windows 11 启动迁移恢复 CLI 集成检查（提交 `1f28b23`）
+
+用户在 Windows 11、Python 3.14.10 环境中实际执行：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests\test_cli.py -q
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\ruff.exe check .
+.\.venv\Scripts\ruff.exe format --check .
+git diff --check
+```
+
+结果：CLI 定向测试 55 passed；全量测试 255 passed；Ruff lint 通过；Ruff format 为 32 files already formatted；`git diff --check` 通过。Git 输出的 LF/CRLF 提示属于换行符转换警告。
+
+本轮在 `src/lcmd/cli/app.py` 中导入并接入 `recover_migration()`。恢复调用位于 `initialize_state()` 的配置读取之前，因此即使配置文件不存在，也不会先创建默认配置绕过恢复逻辑。调用未显式传入 `protected_paths`，保留路径安全模块的默认受保护目录规则。
+
+恢复抛出 `MigrationError` 时，初始化立即中止；根 CLI 输出“知识库迁移恢复失败”及具体错误，并以退出码 1 退出。新增 CLI 测试验证恢复先于配置读取和知识库加载、恢复失败阻断初始化，以及根 CLI 的错误输出和退出码。
+
+本轮自动化测试使用 Mock 验证 CLI 接入和异常路径；迁移核心的日志解析、目录身份校验、清理和恢复边界由既有迁移核心测试覆盖。本轮未进行真实磁盘迁移中断后的人工故障注入验收。
 
 ## 16. 新功能开发前的代码定位规则
 
