@@ -7,12 +7,13 @@ from typer.testing import CliRunner
 
 import lcmd.cli.app as cli_app
 from lcmd.cli.app import create_app
-from lcmd.core.config import AppConfig
+from lcmd.core.config import AppConfig, ConfigError
 from lcmd.core.migration import (
     MigrationCleanupWarning,
     MigrationConfirmationRequired,
     MigrationError,
 )
+from lcmd.core.path_security import PathSecurityError
 from lcmd.knowledge.loader import KnowledgeLoadError
 
 runner = CliRunner()
@@ -963,3 +964,177 @@ def test_path_migration_progress_callback_is_executed(cli_mocks):
 
     assert result.exit_code == 0
     assert "迁移成功" in result.output
+
+
+def test_installer_init_preserves_existing_configuration(
+    tmp_path,
+    monkeypatch,
+):
+    config_file = tmp_path / "config.toml"
+    config_file.touch()
+
+    target_path = tmp_path / "knowledge"
+    validated_path = target_path.resolve()
+
+    existing_config = AppConfig(
+        knowledge_path=tmp_path / "old-knowledge",
+        platform="linux",
+        language="en-US",
+    )
+
+    validate = Mock(return_value=validated_path)
+    load = Mock(return_value=existing_config)
+    save = Mock()
+
+    monkeypatch.setattr(cli_app, "validate_knowledge_path", validate)
+    monkeypatch.setattr(cli_app, "get_config_file", Mock(return_value=config_file))
+    monkeypatch.setattr(cli_app, "load_config", load)
+    monkeypatch.setattr(cli_app, "save_config", save)
+
+    initialize = Mock()
+    monkeypatch.setattr(cli_app, "initialize_state", initialize)
+
+    result = runner.invoke(
+        create_app(),
+        ["--installer-init", "--path", str(target_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "安装配置初始化成功" in result.output
+
+    validate.assert_called_once_with(str(target_path))
+    load.assert_called_once_with(config_file)
+
+    save.assert_called_once_with(
+        AppConfig(
+            knowledge_path=validated_path,
+            platform="linux",
+            language="en-US",
+        ),
+        config_file,
+    )
+
+    initialize.assert_not_called()
+
+
+def test_installer_init_creates_first_configuration(
+    tmp_path,
+    monkeypatch,
+):
+    config_file = tmp_path / "config.toml"
+    target_path = tmp_path / "knowledge"
+    validated_path = target_path.resolve()
+
+    validate = Mock(return_value=validated_path)
+    save = Mock()
+
+    monkeypatch.setattr(cli_app, "validate_knowledge_path", validate)
+    monkeypatch.setattr(cli_app, "get_config_file", Mock(return_value=config_file))
+    monkeypatch.setattr(cli_app, "save_config", save)
+
+    result = runner.invoke(
+        create_app(),
+        ["--installer-init", "--path", str(target_path)],
+    )
+
+    assert result.exit_code == 0
+    assert "安装配置初始化成功" in result.output
+
+    validate.assert_called_once_with(str(target_path))
+    save.assert_called_once_with(
+        AppConfig(
+            knowledge_path=validated_path,
+            platform="windows",
+            language="zh-CN",
+        ),
+        config_file,
+    )
+
+
+def test_installer_init_rejects_invalid_knowledge_path(
+    tmp_path,
+    monkeypatch,
+):
+    config_file = tmp_path / "config.toml"
+
+    validate = Mock(side_effect=PathSecurityError("知识库结构无效"))
+    save = Mock()
+
+    monkeypatch.setattr(cli_app, "validate_knowledge_path", validate)
+    monkeypatch.setattr(cli_app, "get_config_file", Mock(return_value=config_file))
+    monkeypatch.setattr(cli_app, "save_config", save)
+
+    result = runner.invoke(
+        create_app(),
+        ["--installer-init", "--path", str(tmp_path / "invalid")],
+    )
+
+    assert result.exit_code == 1
+    assert "安装配置初始化失败" in result.output
+    assert "知识库结构无效" in result.output
+
+    save.assert_not_called()
+
+
+def test_installer_init_does_not_overwrite_invalid_configuration(
+    tmp_path,
+    monkeypatch,
+):
+    config_file = tmp_path / "config.toml"
+    config_file.write_text("invalid configuration", encoding="utf-8")
+
+    target_path = tmp_path / "knowledge"
+    validated_path = target_path.resolve()
+
+    validate = Mock(return_value=validated_path)
+    load = Mock(side_effect=ConfigError("配置文件格式无效"))
+    save = Mock()
+
+    monkeypatch.setattr(cli_app, "validate_knowledge_path", validate)
+    monkeypatch.setattr(cli_app, "get_config_file", Mock(return_value=config_file))
+    monkeypatch.setattr(cli_app, "load_config", load)
+    monkeypatch.setattr(cli_app, "save_config", save)
+
+    result = runner.invoke(
+        create_app(),
+        ["--installer-init", "--path", str(target_path)],
+    )
+
+    assert result.exit_code == 1
+    assert "安装配置初始化失败" in result.output
+    assert "配置文件格式无效" in result.output
+
+    assert config_file.read_text(encoding="utf-8") == "invalid configuration"
+    save.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--installer-init"],
+        ["--installer-init", "--path", "D:/KB", "--config"],
+        ["--installer-init", "--path", "D:/KB", "--update"],
+        ["--installer-init", "--path", "D:/KB", "--version"],
+        ["--installer-init", "--path", "D:/KB", "--platform", "linux"],
+    ],
+)
+def test_installer_init_rejects_invalid_argument_combinations(
+    arguments,
+    monkeypatch,
+):
+    validate = Mock()
+    save = Mock()
+    initialize = Mock()
+
+    monkeypatch.setattr(cli_app, "validate_knowledge_path", validate)
+    monkeypatch.setattr(cli_app, "save_config", save)
+    monkeypatch.setattr(cli_app, "initialize_state", initialize)
+
+    result = runner.invoke(create_app(), arguments)
+
+    assert result.exit_code == 2
+    assert "--installer-init 必须单独配合 --path 使用" in result.output
+
+    validate.assert_not_called()
+    save.assert_not_called()
+    initialize.assert_not_called()

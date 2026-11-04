@@ -17,6 +17,7 @@ from lcmd.core.migration import (
     migrate_knowledge,
     recover_migration,
 )
+from lcmd.core.path_security import PathSecurityError, validate_knowledge_path
 from lcmd.core.paths import get_config_file, get_default_knowledge_path
 from lcmd.knowledge.loader import (
     KnowledgeLoadError,
@@ -51,6 +52,7 @@ class DynamicTyperGroup(TyperGroup):
     }
 
     _ROOT_FLAG_OPTIONS = {
+        "--installer-init",
         "--config",
         "-c",
         "--update",
@@ -225,6 +227,30 @@ def switch_configuration(
     )
 
 
+def initialize_installer_config(knowledge_path: str) -> AppConfig:
+    """验证安装器部署的知识库，并初始化配置文件。
+
+    只更新知识库路径，保留已有平台和语言设置。
+    不复制、迁移或修改知识库文件。
+    """
+    validated_path = validate_knowledge_path(knowledge_path)
+    config_file = get_config_file()
+
+    if config_file.is_file():
+        config = load_config(config_file)
+        new_config = replace(
+            config,
+            knowledge_path=validated_path,
+        )
+    else:
+        new_config = AppConfig(
+            knowledge_path=validated_path,
+        )
+
+    save_config(new_config, config_file)
+    return new_config
+
+
 def _show_configuration(state: AppState, console: Console) -> None:
     console.print(f"知识库路径：{state.config.knowledge_path}")
     console.print(f"当前平台：{state.config.platform}")
@@ -328,8 +354,45 @@ def create_app() -> typer.Typer:
             "-u",
             help="更新知识库（暂未实现）。",
         ),
+        installer_init: bool = typer.Option(
+            False,
+            "--installer-init",
+            hidden=True,
+        ),
     ) -> None:
         console = Console()
+
+        if installer_init:
+            if (
+                path is None
+                or version
+                or config
+                or platform is not None
+                or language is not None
+                or update
+                or ctx.invoked_subcommand is not None
+                or ctx.meta.get("lcmd_dynamic_arguments") is not None
+            ):
+                console.print(
+                    "--installer-init 必须单独配合 --path 使用。",
+                    style="red",
+                )
+                raise typer.Exit(code=2)
+
+            try:
+                initialized_config = initialize_installer_config(path)
+            except (PathSecurityError, ConfigError, OSError) as exc:
+                console.print(
+                    f"安装配置初始化失败：{exc}",
+                    style="red",
+                )
+                raise typer.Exit(code=1) from None
+
+            console.print(
+                f"安装配置初始化成功，知识库路径：{initialized_config.knowledge_path}",
+                style="green",
+            )
+            raise typer.Exit()
 
         config_options_used = (
             config or path is not None or platform is not None or language is not None
