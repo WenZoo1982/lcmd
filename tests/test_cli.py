@@ -652,6 +652,83 @@ def test_initialize_state_does_not_save_when_loading_fails(
     save_config.assert_not_called()
 
 
+def test_initialize_state_recovers_migration_before_loading_knowledge(
+    tmp_path,
+    monkeypatch,
+):
+    config_file = tmp_path / "config.toml"
+    config_file.touch()
+
+    config = AppConfig(
+        knowledge_path=tmp_path / "knowledge",
+        platform="linux",
+        language="zh-CN",
+    )
+
+    events = []
+
+    def recover(path):
+        events.append("recover")
+        assert path == config_file
+        return False
+
+    def load_config(path):
+        events.append("load_config")
+        return config
+
+    def discover_catalog(path):
+        events.append("discover_catalog")
+        return Mock()
+
+    def load_knowledge(catalog, platform, language):
+        events.append("load_knowledge")
+        return Mock()
+
+    monkeypatch.setattr(cli_app, "recover_migration", recover)
+    monkeypatch.setattr(cli_app, "load_config", load_config)
+    monkeypatch.setattr(cli_app, "discover_catalog", discover_catalog)
+    monkeypatch.setattr(cli_app, "load_knowledge", load_knowledge)
+
+    state = cli_app.initialize_state(config_file)
+
+    assert state.config == config
+    assert events == [
+        "recover",
+        "load_config",
+        "discover_catalog",
+        "load_knowledge",
+    ]
+
+
+def test_initialize_state_stops_when_migration_recovery_fails(
+    tmp_path,
+    monkeypatch,
+):
+    config_file = tmp_path / "config.toml"
+
+    recover = Mock(side_effect=MigrationError("迁移记录损坏"))
+    load_config = Mock()
+
+    monkeypatch.setattr(cli_app, "recover_migration", recover)
+    monkeypatch.setattr(cli_app, "load_config", load_config)
+
+    with pytest.raises(MigrationError, match="迁移记录损坏"):
+        cli_app.initialize_state(config_file)
+
+    recover.assert_called_once_with(config_file)
+    load_config.assert_not_called()
+
+
+def test_cli_reports_migration_recovery_failure(cli_mocks):
+    cli_mocks["initialize"].side_effect = MigrationError("迁移记录损坏")
+
+    result = runner.invoke(create_app(), ["ls"])
+
+    assert result.exit_code == 1
+    assert "知识库迁移恢复失败" in result.output
+    assert "迁移记录损坏" in result.output
+
+
 def test_switch_platform_saves_after_success(tmp_path, monkeypatch):
     state = cli_app.AppState(
         config=AppConfig(
