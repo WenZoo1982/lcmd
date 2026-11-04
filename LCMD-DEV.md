@@ -7,10 +7,10 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `1f28b23`（`feat: recover interrupted knowledge migrations on startup`）；此前迁移进度显示提交 `6ad27f3`、CLI 迁移接入提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`、CLI 配置入口提交 `dc192a8268eb2f3ddbbac52c26e6e896d1121a98`，迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1“CLI 参数与命令结构调整”、任务 2“知识库路径迁移 CLI 集成”和任务 3“启动时接入迁移恢复”均已完成。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `c333bdd`（`build: add PyInstaller onedir configuration`）；此前启动迁移恢复提交 `1f28b23`、迁移进度提交 `6ad27f3`、CLI 迁移接入提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`、CLI 配置入口提交 `dc192a8268eb2f3ddbbac52c26e6e896d1121a98`，迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1“CLI 参数与命令结构调整”、任务 2“知识库路径迁移 CLI 集成”和任务 3“启动时接入迁移恢复”均已完成。阶段二任务 1“Windows 打包与安装部署架构设计”和任务 2“PyInstaller onedir 打包验证”已完成；任务 3“随包知识库与发行完整性校验”待开始。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
 - 当前程序版本：`0.1.0`
-- 当前知识库版本：`0.1.0`（本轮 Windows 实际测试输出）
+- 当前知识库版本：`0.1.0`（本轮 Windows 实际测试输出；便携目录动态查询和搜索读取的是本机现有测试知识库，并非随包知识库）
 
 ---
 
@@ -525,9 +525,9 @@ git diff --check
 
 ## 7. 当前仓库与同步基线
 
-主程序 `main` 分支当前代码提交为 `6ad27f3`（`feat: display knowledge migration progress`），用户已在 Windows 本地完成 commit 和 push。当前远程 `LCMD-DEV.md` 由本次文档同步提交更新；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
+主程序 `main` 分支当前代码提交为 `c333bdd`（`build: add PyInstaller onedir configuration`），完整提交 SHA 为 `c333bdde94343d8991a3b30bf21c6cdaed145758`，用户已在 Windows 本地完成 commit 和 push。当前远程 `LCMD-DEV.md` 由本次文档同步提交更新；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
 
-本轮代码提交只修改 `src/lcmd/cli/app.py` 和 `tests/test_cli.py`，没有修改迁移核心模块。用户在 Windows 11、Python 3.14.10 环境中执行 CLI 定向测试 52 passed、全量测试 252 passed，Ruff lint、Ruff format 和 `git diff --check` 均通过。以上是提交 `6ad27f3` 对应代码的实际验证结果；本轮未进行真实磁盘路径的人工迁移 CLI 验收。
+本次代码提交新增根目录 `lcmd.spec`，并在 `pyproject.toml` 的 dev 可选依赖中增加 `pyinstaller>=6.22,<7`。用户在 Windows 11 build 26300、Python 3.14.10、PyInstaller 6.22.3 环境中完成 onedir 构建、便携目录复制、help/version、动态查询和搜索验证；全量 pytest 为 251 passed、4 skipped，Ruff lint/format 通过。动态查询和搜索使用本机现有测试知识库，正式随包知识库尚未实现；PATH 隔离不等同于完全无 Python 的干净机器测试。详细证据见第 6.6 节。
 
 ---
 
@@ -545,7 +545,13 @@ git diff --check
 
 任务 1 提交：`dc192a8268eb2f3ddbbac52c26e6e896d1121a98`。任务 2 最近提交：`6ad27f3`。任务 3 提交：`1f28b23`。本轮启动恢复通过自动化测试验证；未进行真实迁移日志/磁盘清理的人工故障注入验收。
 
-**尚未实现：** Windows 安装包与安装初始化、主程序/知识库更新机制，以及最终完整帮助信息。以下内容是用户已确认的产品行为和开发约束，不代表代码已经实现。
+**阶段二进度：**
+
+- **已完成——任务 1：Windows 打包与安装部署架构设计。** 已确认 PyInstaller onedir + Inno Setup 单 EXE 图形安装器的技术路线，以及用户级安装、知识库部署、PATH 和用户数据保护原则；尚无安装器实现。
+- **已完成——任务 2：PyInstaller onedir 打包验证。** `lcmd.spec` 和 PyInstaller dev 依赖已提交（`c333bdd`）。Windows 11 下构建和便携目录 help/version、动态查询、搜索均已验证；全量测试 251 passed、4 skipped，Ruff 检查通过。测试边界与“尚未在完全无 Python 的干净机器验证”、测试知识库未随包部署等限制见第 6.6 节。
+- **待开始——任务 3：随包知识库与发行完整性校验。** 必须先确定正式知识库版本，再建立独立发行清单和内容校验；不得将当前 integration fixtures 当作正式发行知识库，也不得扩展现有 Manifest schema。
+
+**尚未实现：** Windows 安装器与安装初始化、主程序/知识库更新机制，以及最终完整帮助信息。以下内容是用户已确认的产品行为和开发约束，不代表代码已经实现。
 
 ### 8.2 知识库与配置文件职责（已确认）
 
@@ -750,7 +756,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 ### 8.5.5 阶段二任务拆分与边界
 
 1. **任务 1：Windows 打包与安装部署架构设计。** 已完成设计；本次只更新总控文档，尚无打包或安装代码。
-2. **任务 2：PyInstaller onedir 打包验证。** 建立最小 Windows 构建配置，验证 `lcmd.exe` 在没有外部 Python 环境的机器/干净测试环境中可启动，确认控制台交互、版本、动态查询和搜索行为。
+2. **任务 2：PyInstaller onedir 打包验证。已完成（提交 `c333bdd`）。** 已建立根目录 `lcmd.spec`，并将 `pyinstaller>=6.22,<7` 加入 dev 可选依赖；Windows 11 下构建和便携目录 help/version、动态查询、搜索均已验证。当前仅完成 PATH 临时隔离测试，尚未在完全无 Python 的干净机器验证；动态查询和搜索使用本机测试知识库，随包知识库留待任务 3。详细证据见第 6.6 节。
 3. **任务 3：随包知识库与发行完整性校验。** 选择正式知识库版本，生成独立文件清单并验证部署内容；不得扩展现有 `manifest.json` schema。
 4. **任务 4：Inno Setup 安装器。** 实现单 EXE 安装包、用户级程序目录、用户 PATH、知识库目录选择和安装/卸载基础流程。
 5. **任务 5：首次初始化与已有数据处理。** 按 8.5.2–8.5.4 实现配置初始化、目标识别、明确覆盖确认、取消和失败保护。
@@ -1157,6 +1163,44 @@ git diff --check
 恢复抛出 `MigrationError` 时，初始化立即中止；根 CLI 输出“知识库迁移恢复失败”及具体错误，并以退出码 1 退出。新增 CLI 测试验证恢复先于配置读取和知识库加载、恢复失败阻断初始化，以及根 CLI 的错误输出和退出码。
 
 本轮自动化测试使用 Mock 验证 CLI 接入和异常路径；迁移核心的日志解析、目录身份校验、清理和恢复边界由既有迁移核心测试覆盖。本轮未进行真实磁盘迁移中断后的人工故障注入验收。
+
+### 6.6 Windows 11 PyInstaller onedir 打包验证（提交 `c333bdd`）
+
+用户在 Windows 11 build 26300、Python 3.14.10 x64 环境中，使用项目虚拟环境和 PyInstaller 6.22.3 完成 onedir 构建验证。PyInstaller 作为开发/构建依赖加入 `pyproject.toml`，版本约束为 `pyinstaller>=6.22,<7`；不属于 LCMD 运行时依赖。
+
+正式打包配置为仓库根目录的 `lcmd.spec`，已纳入版本控制。配置要点：
+
+- 入口为 `src/lcmd/__main__.py`，不是只定义 `main()` 的 `src/lcmd/main.py`。
+- 使用 PyInstaller `COLLECT` 生成 onedir 目录。
+- `console=True`，保留 CLI 所需的控制台及标准输入/输出/错误流。
+- 可执行文件名为 `lcmd.exe`。
+- 构建命令：
+
+```powershell
+.\.venv\Scripts\python.exe -m PyInstaller --clean --noconfirm lcmd.spec
+```
+
+构建成功，生成 `dist\lcmd\lcmd.exe`。构建目录共 20 个文件，约 22.97 MB；Python 运行时及所需 VC Runtime 文件已随目录收集。将整个 `dist\lcmd` 复制到独立目录 `D:\LCMD-Portable-Test` 后，完成以下人工验证：
+
+| 验证项 | 实际结果 |
+|---|---|
+| 便携目录中的 `lcmd.exe --version` | 成功，退出码 0 |
+| 便携目录中的 `lcmd.exe --help` | 成功，退出码 0 |
+| 从当前 PowerShell PATH 临时排除项目 `.venv\Scripts`、系统 Python 3.14 目录及其 Scripts 目录后启动 | 版本和帮助仍成功 |
+| 动态命令查询 `lcmd ls` | 成功，显示完整中文命令文档 |
+| 搜索 `lcmd search ls` | 成功，返回 1 条中文搜索结果 |
+
+上述动态查询和搜索读取的是本机现有测试知识库；当前 onedir 产物尚未包含正式随包知识库，因此这两项证明的是打包程序可调用查询/搜索流程，不证明知识库已随包部署。当前知识库仓库只有 integration fixtures，不能作为正式发行内容。
+
+**环境限制：** PATH 隔离测试只是临时排除了指定 Python 路径，并非在完全没有 Python 安装的干净 Windows 机器上测试；不能据此宣称已完成无 Python 干净机器验收。当前也尚未进行 Inno Setup 安装器验收。
+
+提交前质量检查结果：
+
+- 全量 pytest：255 项收集，251 passed、4 skipped、0 failed。4 项跳过均因当前 Windows 环境不支持创建文件或目录符号链接。
+- Ruff lint：`All checks passed!`
+- Ruff format：`32 files already formatted`
+- `git diff --check` 和暂存区 `git diff --cached --check`：无空白错误；Git 的 LF/CRLF 转换提示不是检查失败。
+- 提交：`c333bdde94343d8991a3b30bf21c6cdaed145758`（`build: add PyInstaller onedir configuration`），已推送到 `origin/main`。
 
 ## 16. 新功能开发前的代码定位规则
 
