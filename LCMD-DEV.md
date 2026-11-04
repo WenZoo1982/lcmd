@@ -7,10 +7,10 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `c333bdd`（`build: add PyInstaller onedir configuration`）；此前启动迁移恢复提交 `1f28b23`、迁移进度提交 `6ad27f3`、CLI 迁移接入提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`、CLI 配置入口提交 `dc192a8268eb2f3ddbbac52c26e6e896d1121a98`，迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1“CLI 参数与命令结构调整”、任务 2“知识库路径迁移 CLI 集成”和任务 3“启动时接入迁移恢复”均已完成。阶段二任务 1“Windows 打包与安装部署架构设计”和任务 2“PyInstaller onedir 打包验证”已完成；任务 3“随包知识库与发行完整性校验”待开始。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `c2363e2e0845a1aa7710d6379278f82306323689`（`build: add release staging and knowledge integrity checks`）；此前 PyInstaller onedir 配置提交 `c333bdde94343d8991a3b30bf21c6cdaed145758`；启动迁移恢复提交 `1f28b23`、迁移进度提交 `6ad27f3`、CLI 迁移接入提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`、CLI 配置入口提交 `dc192a8268eb2f3ddbbac52c26e6e896d1121a98`，迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1“CLI 参数与命令结构调整”、任务 2“知识库路径迁移 CLI 集成”和任务 3“启动时接入迁移恢复”均已完成。阶段二任务 1“Windows 打包与安装部署架构设计”、任务 2“PyInstaller onedir 打包验证”和任务 3“随包知识库与发行完整性校验”均已完成；下一项为任务 4“Inno Setup 安装器”。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
 - 当前程序版本：`0.1.0`
-- 当前知识库版本：`0.1.0`（本轮 Windows 实际测试输出；便携目录动态查询和搜索读取的是本机现有测试知识库，并非随包知识库）
+- 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的 Pre-release `v0.1.0`；当前内容为 13 篇 integration fixtures，不是完整正式命令目录。阶段二任务 3 已将该测试知识库作为内部打包样本随包部署并完成校验，不代表正式知识库内容验收完成）
 
 ---
 
@@ -525,9 +525,11 @@ git diff --check
 
 ## 7. 当前仓库与同步基线
 
-主程序 `main` 分支当前代码提交为 `c333bdd`（`build: add PyInstaller onedir configuration`），完整提交 SHA 为 `c333bdde94343d8991a3b30bf21c6cdaed145758`，用户已在 Windows 本地完成 commit 和 push。当前远程 `LCMD-DEV.md` 由本次文档同步提交更新；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
+主程序 `main` 分支当前代码提交为 `c2363e2e0845a1aa7710d6379278f82306323689`（`build: add release staging and knowledge integrity checks`），用户已在 Windows 本地完成 commit 和 push。此前 PyInstaller onedir 配置提交为 `c333bdde94343d8991a3b30bf21c6cdaed145758`。当前远程 `LCMD-DEV.md` 由本次文档同步提交更新；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
 
-本次代码提交新增根目录 `lcmd.spec`，并在 `pyproject.toml` 的 dev 可选依赖中增加 `pyinstaller>=6.22,<7`。用户在 Windows 11 build 26300、Python 3.14.10、PyInstaller 6.22.3 环境中完成 onedir 构建、便携目录复制、help/version、动态查询和搜索验证；全量 pytest 为 251 passed、4 skipped，Ruff lint/format 通过。动态查询和搜索使用本机现有测试知识库，正式随包知识库尚未实现；PATH 隔离不等同于完全无 Python 的干净机器测试。详细证据见第 6.6 节。
+本次代码提交新增 `scripts/build-release.ps1`，用于从已校验 SHA-256 的知识库 ZIP 构建发行暂存目录：重新构建 `lcmd.spec`，复制 `app` 与独立 `knowledge` 目录，生成根目录 `knowledge-integrity.json`，登记知识库文件相对路径、大小及 SHA-256，并执行逐文件和文件集合复核。清单使用 UTF-8 无 BOM；脚本拒绝覆盖已有输出目录，并在本次构建失败时清理本次创建的输出目录。该清单是发行层完整性数据，不修改知识库 `manifest.json` schema，也尚未接入安装后运行时完整性检查或在线更新。
+
+用户在 Windows 11 build 26300、Python 3.14.10、PyInstaller 6.22.3 环境中，使用 `lcmd-kb` 的 `v0.1.0` Pre-release ZIP（下载 SHA-256：`594df745e3087068ca910398578e281ef9002f2ccf3806f45033f55a6abb6930`）构建 `lcmd-0.1.0-beta.1-build`。实际人工验收包括：15 个知识库文件逐文件 SHA-256、已有输出目录拒绝覆盖且原内容保持不变、故障注入后自动清理本次输出目录、暂存知识库配置下 `--version`/`--config`/`dir`/`search dir` 正常，以及独立 Python 复核清单编码、版本、文件数量、文件集合、文件大小和 SHA-256 全部通过。全量 pytest 为 251 passed、4 skipped，Ruff lint/format、PowerShell Parser、`git diff --check` 和暂存区差异检查均通过。4 项 skipped 均因当前 Windows 环境不支持创建符号链接。详细证据见第 6.7 节。
 
 ---
 
@@ -757,12 +759,12 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 
 1. **任务 1：Windows 打包与安装部署架构设计。** 已完成设计；本次只更新总控文档，尚无打包或安装代码。
 2. **任务 2：PyInstaller onedir 打包验证。已完成（提交 `c333bdd`）。** 已建立根目录 `lcmd.spec`，并将 `pyinstaller>=6.22,<7` 加入 dev 可选依赖；Windows 11 下构建和便携目录 help/version、动态查询、搜索均已验证。当前仅完成 PATH 临时隔离测试，尚未在完全无 Python 的干净机器验证；动态查询和搜索使用本机测试知识库，随包知识库留待任务 3。详细证据见第 6.6 节。
-3. **任务 3：随包知识库与发行完整性校验。** 选择正式知识库版本，生成独立文件清单并验证部署内容；不得扩展现有 `manifest.json` schema。
-4. **任务 4：Inno Setup 安装器。** 实现单 EXE 安装包、用户级程序目录、用户 PATH、知识库目录选择和安装/卸载基础流程。
+3. **已完成——任务 3：随包知识库与发行完整性校验（提交 `c2363e2`）。** 新增 `scripts/build-release.ps1`，从指定知识库 ZIP 校验 SHA-256、检查 Manifest/目录结构、构建 PyInstaller onedir、复制主程序和独立知识库目录，并生成 `knowledge-integrity.json`。清单覆盖 15 个知识库文件的相对路径、大小和 SHA-256；完成正常构建、逐文件复核、拒绝覆盖保护及故障清理测试。当前使用的是 `lcmd-kb` `v0.1.0` Pre-release integration fixtures，仅用于验证发行链路，不是完整正式知识库。清单尚未接入安装后运行时验证，也不包含更新机制。
+4. **待开始——任务 4：Inno Setup 安装器。** 实现单 EXE 安装包、用户级程序目录、用户 PATH、知识库目录选择和安装/卸载基础流程。
 5. **任务 5：首次初始化与已有数据处理。** 按 8.5.2–8.5.4 实现配置初始化、目标识别、明确覆盖确认、取消和失败保护。
 6. **任务 6：安装、升级、修复、卸载验收。** 验证首次安装、已有有效/无效目录、用户自定义路径、已有配置、升级、修复、卸载及中断恢复。
 
-当前阶段二仍未实现任何打包或安装功能。当前知识库只有测试样例，任务 2 可以先用专门的测试知识库验证打包链路，但不得将该产物标记为正式发行版。
+阶段二任务 2 已完成 PyInstaller onedir 构建验证，任务 3 已完成随包测试知识库与发行完整性清单的构建/校验链路；尚未实现 Inno Setup 安装器、安装后运行时完整性检查或更新功能。当前知识库只有 integration fixtures，相关构建产物仅用于内部验证，不得标记为正式发行版。
 
 ### 8.6 更新机制与阶段顺序（方向已确认，细节待设计）
 
@@ -825,7 +827,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 | 自定义路径 | `-c --path <目录>` 已接入迁移 API；覆盖确认、错误、清理警告、复制字节百分比进度及启动恢复均已实现 |
 | 搜索分页 | 每页 5 条；交互终端自动分页 |
 | 在线更新 | 已确认未来提供 --update/-u；更新机制未设计/实现 |
-| 安装包 | 已确认 Windows 安装默认携带官方知识库；安装包未实现 |
+| 安装包 | 已确认 Windows 安装默认携带官方知识库；Inno Setup 安装器未实现 |
 | 主程序/知识库远程 Release 更新 | 未实现 |
 | 命令执行 | 不执行 |
 | 系统命令安装检测 | 不检测 |
@@ -1201,6 +1203,38 @@ git diff --check
 - Ruff format：`32 files already formatted`
 - `git diff --check` 和暂存区 `git diff --cached --check`：无空白错误；Git 的 LF/CRLF 转换提示不是检查失败。
 - 提交：`c333bdde94343d8991a3b30bf21c6cdaed145758`（`build: add PyInstaller onedir configuration`），已推送到 `origin/main`。
+
+
+### 6.7 Windows 11 随包知识库与发行完整性校验（提交 `c2363e2`）
+
+用户在 Windows 11 build 26300、Python 3.14.10、PyInstaller 6.22.3 环境中完成阶段二任务 3。新增脚本 `scripts/build-release.ps1`，不修改现有 `manifest.json` schema。
+
+知识库来源为公开仓库 `WenZoo1982/lcmd-kb` 的 Pre-release：
+
+- Release：<https://github.com/WenZoo1982/lcmd-kb/releases/tag/v0.1.0>
+- ZIP：`lcmd-kb-0.1.0.zip`
+- 下载文件 SHA-256：`594df745e3087068ca910398578e281ef9002f2ccf3806f45033f55a6abb6930`
+- 当前 KB 内容为 13 篇 integration fixtures（仓库跟踪文件共 15 个），明确不是完整正式命令目录；仅用于内部验证发行构建链路。
+
+脚本输入主程序版本、Pre-release 标识、知识库 ZIP、预期 ZIP SHA-256 和输出目录，执行以下工作：
+
+1. 校验输入、知识库 ZIP SHA-256、Manifest 精确字段结构、三段式版本和支持的 Major 版本，以及必要目录结构。
+2. 解压知识库，重新执行 PyInstaller onedir 构建。
+3. 在输出目录分别生成 `app/`、`knowledge/` 和 `knowledge-integrity.json`；不把知识库嵌入 PyInstaller 运行时目录。
+4. 完整性清单记录主程序版本/Pre-release、知识库版本、原始 ZIP SHA-256、文件数量，以及每个知识库文件的相对路径、大小和 SHA-256。
+5. 使用 UTF-8 无 BOM 写入清单，并在构建后重新核对文件数量、文件大小、SHA-256 和实际文件集合。
+6. 若输出目录预先存在则拒绝构建、不覆盖；若本次创建输出目录后发生失败，则清理本次创建的目录，不触碰已有目录。
+
+实际构建输出目录：`D:\Project_DEV\lcmd-releases\lcmd-0.1.0-beta.1-build`。构建成功，15 个知识库文件逐文件 SHA-256 全部通过。另完成以下人工验收：
+
+- 在临时配置指向发行目录的随包知识库后，`lcmd --config`、`lcmd --version`、`lcmd dir` 和 `lcmd search dir` 正常；原用户配置已恢复。
+- 已有输出目录保护测试：脚本以退出码 1 拒绝构建，原完整性清单 SHA-256 不变，原 `lcmd.exe` 仍存在。
+- 故障注入测试：在临时脚本副本中于输出目录创建后触发异常，脚本以退出码 1 退出并清理本次创建的测试输出目录；临时测试脚本已删除。
+- 最终独立 Python 复核：清单 UTF-8 无 BOM、JSON 可解析、版本字段正确、15 个文件大小和 SHA-256 全部匹配，实际文件集合与清单完全一致，`app/lcmd.exe` 与 `app/_internal` 存在。
+
+提交前检查：全量 pytest 255 项收集，251 passed、4 skipped、0 failed；4 项因 Windows 环境不支持创建文件/目录符号链接而跳过。Ruff lint 通过，Ruff format 为 32 files already formatted；PowerShell Parser 语法检查通过；`git diff --check` 和暂存区差异检查通过。
+
+**边界：** 本轮只完成发行暂存目录的构建和离线文件完整性清单生成/校验。尚未实现安装后运行时完整性验证、Inno Setup 安装器、主程序/知识库在线更新或更新回滚；本次测试知识库不得视为正式内容验收。
 
 ## 16. 新功能开发前的代码定位规则
 
