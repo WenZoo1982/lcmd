@@ -701,7 +701,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 
 - 使用 Inno Setup 将 PyInstaller onedir 输出、官方知识库和安装所需元数据封装为单个 Windows EXE 安装包。
 - 安装向导负责程序目录选择、知识库目录检查与选择、安装进度、快捷方式、当前用户 PATH 配置和卸载入口。
-- 默认采用当前用户安装模式，不主动请求管理员权限；默认程序目录为 `%LOCALAPPDATA%\\Programs\\LCMD`。用户可选择其他有写入权限的目录。
+- 默认采用当前用户安装模式，不主动请求管理员权限；默认程序目录为 `%LOCALAPPDATA%\Programs\LCMD`。用户可选择其他有写入权限的目录。
 - 将程序目录加入当前用户 PATH，使新启动的终端可以直接执行 `lcmd`；不得修改系统级 PATH。卸载时只移除安装器添加的 LCMD PATH 项，并保留 PATH 中其他内容。
 - 安装器修改环境变量后应通知 Windows 更新环境变量；已打开的终端不会自动获得新 PATH，需重新打开终端。
 - 参考：<https://jrsoftware.org/ishelp/topic_setup_privilegesrequired.htm>、<https://jrsoftware.org/ishelp/topic_admininstallmode.htm>、<https://jrsoftware.org/ishelp/topic_setup_changesenvironment.htm>。
@@ -711,7 +711,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 
 | 内容 | 默认位置/规则 | 生命周期 |
 |---|---|---|
-| LCMD 主程序 | `%LOCALAPPDATA%\\Programs\\LCMD` | 由安装器安装、升级和卸载 |
+| LCMD 主程序 | `%LOCALAPPDATA%\Programs\LCMD` | 由安装器安装、升级和卸载 |
 | 知识库 | `get_default_knowledge_path()` 返回的位置，即 platformdirs 用户数据目录下的 `knowledge` | 用户数据；默认不随程序卸载删除 |
 | 配置文件 | `get_config_file()` 返回的位置，即 platformdirs 用户配置目录下的 `config.toml` | 用户配置；默认不随程序卸载删除 |
 | 用户自定义知识库 | 用户选择的知识库根目录 | 用户数据；不由程序升级或卸载擅自删除 |
