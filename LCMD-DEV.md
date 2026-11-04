@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `c2363e2e0845a1aa7710d6379278f82306323689`（`build: add release staging and knowledge integrity checks`）；此前 PyInstaller onedir 配置提交 `c333bdde94343d8991a3b30bf21c6cdaed145758`；启动迁移恢复提交 `1f28b23`、迁移进度提交 `6ad27f3`、CLI 迁移接入提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`、CLI 配置入口提交 `dc192a8268eb2f3ddbbac52c26e6e896d1121a98`，迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1“CLI 参数与命令结构调整”、任务 2“知识库路径迁移 CLI 集成”和任务 3“启动时接入迁移恢复”均已完成。阶段二任务 1“Windows 打包与安装部署架构设计”、任务 2“PyInstaller onedir 打包验证”和任务 3“随包知识库与发行完整性校验”均已完成；下一项为任务 4“Inno Setup 安装器”。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `7a0a57c24dd67734eef8d885b144a040cec3fbba`（`feat: add Windows installer with Inno Setup`）；此前发行暂存构建提交 `c2363e2e0845a1aa7710d6379278f82306323689`、PyInstaller onedir 配置提交 `c333bdde94343d8991a3b30bf21c6cdaed145758`；启动迁移恢复提交 `1f28b23`、迁移进度提交 `6ad27f3`、CLI 迁移接入提交 `7024d8d78fee4364a36b0836d2a1187606b92e0f`、CLI 配置入口提交 `dc192a8268eb2f3ddbbac52c26e6e896d1121a98`，迁移核心实现提交 `a516d4cd6681639c7a091413028df2d8b2bb6e27`
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1“CLI 参数与命令结构调整”、任务 2“知识库路径迁移 CLI 集成”和任务 3“启动时接入迁移恢复”均已完成。阶段二任务 1“Windows 打包与安装部署架构设计”、任务 2“PyInstaller onedir 打包验证”、任务 3“随包知识库与发行完整性校验”和任务 4“Inno Setup 基础安装器”均已完成；下一项为任务 5“首次初始化与已有数据处理”。阶段二任务 4 目前仅完成安装器脚本编译和产物检查，尚未运行安装器；启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的 Pre-release `v0.1.0`；当前内容为 13 篇 integration fixtures，不是完整正式命令目录。阶段二任务 3 已将该测试知识库作为内部打包样本随包部署并完成校验，不代表正式知识库内容验收完成）
 
@@ -525,7 +525,7 @@ git diff --check
 
 ## 7. 当前仓库与同步基线
 
-主程序 `main` 分支当前代码提交为 `c2363e2e0845a1aa7710d6379278f82306323689`（`build: add release staging and knowledge integrity checks`），用户已在 Windows 本地完成 commit 和 push。此前 PyInstaller onedir 配置提交为 `c333bdde94343d8991a3b30bf21c6cdaed145758`。当前远程 `LCMD-DEV.md` 由本次文档同步提交更新；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
+主程序 `main` 分支当前代码提交为 `7a0a57c24dd67734eef8d885b144a040cec3fbba`（`feat: add Windows installer with Inno Setup`），用户已在 Windows 本地完成 commit 和 push。此前发行暂存构建提交为 `c2363e2e0845a1aa7710d6379278f82306323689`，PyInstaller onedir 配置提交为 `c333bdde94343d8991a3b30bf21c6cdaed145758`。当前远程 `LCMD-DEV.md` 由本次文档同步提交更新；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
 
 本次代码提交新增 `scripts/build-release.ps1`，用于从已校验 SHA-256 的知识库 ZIP 构建发行暂存目录：重新构建 `lcmd.spec`，复制 `app` 与独立 `knowledge` 目录，生成根目录 `knowledge-integrity.json`，登记知识库文件相对路径、大小及 SHA-256，并执行逐文件和文件集合复核。清单使用 UTF-8 无 BOM；脚本拒绝覆盖已有输出目录，并在本次构建失败时清理本次创建的输出目录。该清单是发行层完整性数据，不修改知识库 `manifest.json` schema，也尚未接入安装后运行时完整性检查或在线更新。
 
@@ -533,6 +533,14 @@ git diff --check
 
 ---
 
+
+本次代码提交新增 `installer/lcmd.iss`（提交 `7a0a57c24dd67734eef8d885b144a040cec3fbba`），使用 Inno Setup 7.1.1 将发行暂存目录中的 `app/`、`knowledge/` 和 `knowledge-integrity.json` 封装为单个 GUI EXE 安装包。脚本配置用户级安装，默认程序目录为 `%LOCALAPPDATA%\Programs\LCMD`；允许选择知识库根目录；安装时把程序目录加入当前用户 PATH，卸载时尝试只移除该程序目录项；创建开始菜单快捷方式，并提供安装完成后启动 LCMD 的入口。
+
+知识库目录初始值按以下顺序选择：读取 `%LOCALAPPDATA%\lcmd\config.toml` 中的 `[knowledge].path`（仅接受当前 LCMD 保存格式的单行双引号基本字符串、三个必需字段及已存在的绝对目录）；否则使用 `HKCU\Software\WenZoo\LCMD\KnowledgeDir` 中有效的现存目录；再否则使用 `%LOCALAPPDATA%\lcmd\knowledge`。用户最终选择的目录写入该注册表项。该脚本中的 TOML 读取逻辑是针对当前配置输出格式的有限解析，不是完整 TOML 解析器。
+
+用户在 Windows 11 上使用 Inno Setup 7.1.1 编译 `installer/lcmd.iss`，结果 `Successful compile`，退出代码 0。生成安装包：`D:\Project_DEV\lcmd-releases\LCMD-Setup-0.1.0-beta.1.exe`，大小 12,643,865 字节，SHA-256：`07B50CE7ADB54D84A857EBEE56032187F0AF1490EEE9CEE7D0C6532335A1A53F`。`installer/` 目录仅包含 `lcmd.iss`；暂存区仅有该文件，`git diff --cached --check` 通过；提交并推送成功。
+
+**验收边界：** 本轮只验证 Inno Setup 脚本可编译及安装包文件可生成、可读取哈希。没有运行安装包，没有验证实际文件复制、PATH 写入/移除、配置注册表读写、升级/修复/卸载或安装中断行为。当前脚本尚未实现目标知识库目录的结构识别、已有数据保护、明确覆盖确认及失败回滚；在任务 5、任务 6 完成前不得运行此安装包。编译器输出 `Non-commercial use only`；正式商业发行前必须核对并满足 Inno Setup 7 的商业许可要求。
 ## 8. 当前阶段结论与已确认的后续产品设计
 
 ### 8.1 当前阶段状态
@@ -549,11 +557,12 @@ git diff --check
 
 **阶段二进度：**
 
-- **已完成——任务 1：Windows 打包与安装部署架构设计。** 已确认 PyInstaller onedir + Inno Setup 单 EXE 图形安装器的技术路线，以及用户级安装、知识库部署、PATH 和用户数据保护原则；尚无安装器实现。
+- **已完成——任务 1：Windows 打包与安装部署架构设计。** 已确认 PyInstaller onedir + Inno Setup 单 EXE 图形安装器的技术路线，以及用户级安装、知识库部署、PATH 和用户数据保护原则。
 - **已完成——任务 2：PyInstaller onedir 打包验证。** `lcmd.spec` 和 PyInstaller dev 依赖已提交（`c333bdd`）。Windows 11 下构建和便携目录 help/version、动态查询、搜索均已验证；全量测试 251 passed、4 skipped，Ruff 检查通过。测试边界与“尚未在完全无 Python 的干净机器验证”、测试知识库未随包部署等限制见第 6.6 节。
-- **待开始——任务 3：随包知识库与发行完整性校验。** 必须先确定正式知识库版本，再建立独立发行清单和内容校验；不得将当前 integration fixtures 当作正式发行知识库，也不得扩展现有 Manifest schema。
+- **已完成——任务 3：随包知识库与发行完整性校验（提交 `c2363e2`）。** 新增 `scripts/build-release.ps1`，从指定知识库 ZIP 校验 SHA-256、检查 Manifest/目录结构、构建 PyInstaller onedir、复制主程序和独立知识库目录，并生成 `knowledge-integrity.json`。清单覆盖 15 个知识库文件的相对路径、大小和 SHA-256；完成正常构建、逐文件复核、拒绝覆盖保护及故障清理测试。当前使用的是 `lcmd-kb` `v0.1.0` Pre-release integration fixtures，仅用于验证发行链路，不是完整正式知识库。清单尚未接入安装后运行时验证，也不包含更新机制。
+- **已完成——任务 4：Inno Setup 基础安装器（提交 `7a0a57c`）。** 新增 `installer/lcmd.iss`，完成单 EXE 安装器基础脚本并通过 Inno Setup 7.1.1 编译；安装包文件信息和 SHA-256 见第 6.8 节。未运行安装包，故实际安装行为尚未验收。
 
-**尚未实现：** Windows 安装器与安装初始化、主程序/知识库更新机制，以及最终完整帮助信息。以下内容是用户已确认的产品行为和开发约束，不代表代码已经实现。
+**尚未实现：** 安装器首次初始化与已有数据保护、安装/升级/修复/卸载验收、主程序/知识库更新机制，以及最终完整帮助信息。阶段二任务 4 已新增并编译 Inno Setup 基础安装器脚本，但尚未实际运行安装包。以下内容是用户已确认的产品行为和开发约束，不代表代码已经实现。
 
 ### 8.2 知识库与配置文件职责（已确认）
 
@@ -677,7 +686,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 
 阶段一任务 1、任务 2 和任务 3 均已完成。任务 3 将迁移恢复接入启动初始化流程；安装包、更新机制和完整帮助仍属于后续独立工作，不应在没有重新核对路线图和当前代码前提前推进。
 
-### 8.5 Windows 安装包与首次初始化（产品方向已确认；部署架构设计已完成，尚未实现）
+### 8.5 Windows 安装包与首次初始化（产品方向及部署架构已确认；基础安装器脚本已实现，首次初始化与数据保护待实现）
 
 已确认的产品行为：
 
@@ -694,7 +703,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 - 卸载程序默认只移除程序文件、安装器创建的快捷方式和 PATH 项，不删除知识库和用户配置。用户数据清理策略如需增加，必须单独设计并明确征求同意。
 - 当前知识库仓库只有少量 integration fixtures，不能作为正式发行知识库；正式安装包必须使用完成内容规范并经过验收的官方知识库版本。
 
-### 8.5.1 Windows 打包与安装器技术路线（设计已确认）
+### 8.5.1 Windows 打包与安装器技术路线（设计已确认；基础安装器脚本已实现）
 
 **主程序打包：PyInstaller，采用 onedir 模式。**
 
@@ -713,7 +722,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 - 将程序目录加入当前用户 PATH，使新启动的终端可以直接执行 `lcmd`；不得修改系统级 PATH。卸载时只移除安装器添加的 LCMD PATH 项，并保留 PATH 中其他内容。
 - 安装器修改环境变量后应通知 Windows 更新环境变量；已打开的终端不会自动获得新 PATH，需重新打开终端。
 - 参考：<https://jrsoftware.org/ishelp/topic_setup_privilegesrequired.htm>、<https://jrsoftware.org/ishelp/topic_admininstallmode.htm>、<https://jrsoftware.org/ishelp/topic_setup_changesenvironment.htm>。
-- 正式发布前核对所选 Inno Setup 版本的许可条款及商业使用要求。
+- 正式发布前核对所选 Inno Setup 版本的许可条款及商业使用要求。当前本机 Inno Setup 7.1.1 编译器输出 `Non-commercial use only`；正式商业发行前必须核实并满足对应商业许可要求。
 
 ### 8.5.2 安装目录与用户数据目录（设计已确认）
 
@@ -760,11 +769,11 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 1. **任务 1：Windows 打包与安装部署架构设计。** 已完成设计；本次只更新总控文档，尚无打包或安装代码。
 2. **任务 2：PyInstaller onedir 打包验证。已完成（提交 `c333bdd`）。** 已建立根目录 `lcmd.spec`，并将 `pyinstaller>=6.22,<7` 加入 dev 可选依赖；Windows 11 下构建和便携目录 help/version、动态查询、搜索均已验证。当前仅完成 PATH 临时隔离测试，尚未在完全无 Python 的干净机器验证；动态查询和搜索使用本机测试知识库，随包知识库留待任务 3。详细证据见第 6.6 节。
 3. **已完成——任务 3：随包知识库与发行完整性校验（提交 `c2363e2`）。** 新增 `scripts/build-release.ps1`，从指定知识库 ZIP 校验 SHA-256、检查 Manifest/目录结构、构建 PyInstaller onedir、复制主程序和独立知识库目录，并生成 `knowledge-integrity.json`。清单覆盖 15 个知识库文件的相对路径、大小和 SHA-256；完成正常构建、逐文件复核、拒绝覆盖保护及故障清理测试。当前使用的是 `lcmd-kb` `v0.1.0` Pre-release integration fixtures，仅用于验证发行链路，不是完整正式知识库。清单尚未接入安装后运行时验证，也不包含更新机制。
-4. **待开始——任务 4：Inno Setup 安装器。** 实现单 EXE 安装包、用户级程序目录、用户 PATH、知识库目录选择和安装/卸载基础流程。
-5. **任务 5：首次初始化与已有数据处理。** 按 8.5.2–8.5.4 实现配置初始化、目标识别、明确覆盖确认、取消和失败保护。
+4. **已完成——任务 4：Inno Setup 基础安装器（提交 `7a0a57c`）。** 新增 `installer/lcmd.iss`，实现单 EXE 图形安装器的基础配置：用户级程序目录、知识库目录选择、根据当前 `config.toml`/注册表/默认目录预填知识库位置、当前用户 PATH 添加与卸载移除、快捷方式、安装后启动入口。使用 Inno Setup 7.1.1 编译成功，退出代码 0；生成 `LCMD-Setup-0.1.0-beta.1.exe`，大小 12,643,865 字节，SHA-256 为 `07B50CE7ADB54D84A857EBEE56032187F0AF1490EEE9CEE7D0C6532335A1A53F`。**本轮未运行安装包**，不构成安装行为验收。配置文件路径预填解析器仅支持 LCMD 当前保存格式中的单行双引号基本字符串及 `\\`、`\"` 转义，不是通用 TOML 解析器；只有配置路径是绝对路径且目录存在时才采用，否则回退注册表或默认目录。
+5. **待开始——任务 5：首次初始化与已有数据处理。** 按 8.5.2–8.5.4 实现配置初始化、目标识别、明确覆盖确认、取消和失败保护。
 6. **任务 6：安装、升级、修复、卸载验收。** 验证首次安装、已有有效/无效目录、用户自定义路径、已有配置、升级、修复、卸载及中断恢复。
 
-阶段二任务 2 已完成 PyInstaller onedir 构建验证，任务 3 已完成随包测试知识库与发行完整性清单的构建/校验链路；尚未实现 Inno Setup 安装器、安装后运行时完整性检查或更新功能。当前知识库只有 integration fixtures，相关构建产物仅用于内部验证，不得标记为正式发行版。
+阶段二任务 2 已完成 PyInstaller onedir 构建验证，任务 3 已完成随包测试知识库与发行完整性清单的构建/校验链路，任务 4 已完成 Inno Setup 基础安装器脚本及编译。任务 4 尚未运行安装包；首次初始化、已有数据识别/保护、安装后运行时完整性检查和更新功能仍未实现。当前知识库只有 integration fixtures，相关构建产物仅用于内部验证，不得标记为正式发行版。
 
 ### 8.6 更新机制与阶段顺序（方向已确认，细节待设计）
 
@@ -1234,7 +1243,23 @@ git diff --check
 
 提交前检查：全量 pytest 255 项收集，251 passed、4 skipped、0 failed；4 项因 Windows 环境不支持创建文件/目录符号链接而跳过。Ruff lint 通过，Ruff format 为 32 files already formatted；PowerShell Parser 语法检查通过；`git diff --check` 和暂存区差异检查通过。
 
-**边界：** 本轮只完成发行暂存目录的构建和离线文件完整性清单生成/校验。尚未实现安装后运行时完整性验证、Inno Setup 安装器、主程序/知识库在线更新或更新回滚；本次测试知识库不得视为正式内容验收。
+**边界：** 本轮只完成发行暂存目录的构建和离线文件完整性清单生成/校验。尚未实现安装后运行时完整性验证、主程序/知识库在线更新或更新回滚；本次测试知识库不得视为正式内容验收。
+
+### 6.8 Windows 11 Inno Setup 基础安装器编译检查（提交 `7a0a57c`）
+
+用户在 Windows 11 环境中安装 Inno Setup 7.1.1，并新增 `installer/lcmd.iss`。脚本封装既有发行暂存目录，不重新执行 PyInstaller 构建，也不下载知识库。主要配置包括：
+
+- 单个 GUI EXE 安装包；PyInstaller onedir 程序文件、独立知识库文件和 `knowledge-integrity.json` 分别按既定目录部署。
+- 当前用户安装，`PrivilegesRequired=lowest`；默认程序目录 `%LOCALAPPDATA%\\Programs\\LCMD`，目标架构 x64。
+- 提供知识库根目录选择页；初始路径依次尝试当前 `config.toml` 中的有效路径、LCMD 注册表保存路径、默认 `%LOCALAPPDATA%\\lcmd\\knowledge`。
+- 安装完成后保存知识库目录注册表值，并将程序目录加入当前用户 PATH；卸载时尝试只移除该 LCMD 程序目录项。
+- 创建开始菜单快捷方式，并提供安装完成后启动程序的入口。
+
+配置文件预填逻辑只针对 LCMD 当前 `save_config()` 输出的单行双引号基本 TOML 字符串格式，处理 `\\` 和 `\\\"` 转义；不应描述为通用 TOML 解析器。配置路径必须是绝对路径且目录已存在才会被采用，否则回退到注册表或默认路径。
+
+用户执行 `& "D:\\DEV\\Inno Setup 7\\ISCC.exe" "installer\\lcmd.iss"`，编译结果 `Successful compile (4.032 sec)`，退出代码 0。生成文件 `D:\\Project_DEV\\lcmd-releases\\LCMD-Setup-0.1.0-beta.1.exe`：12,643,865 字节；SHA-256 `07B50CE7ADB54D84A857EBEE56032187F0AF1490EEE9CEE7D0C6532335A1A53F`。静态检查确认 `installer/` 仅包含 `lcmd.iss`；`git diff --check` 和暂存区检查通过；提交 `7a0a57c24dd67734eef8d885b144a040cec3fbba` 已推送到 `origin/main`。
+
+**验收边界：** 本轮未运行安装包；未验证实际文件部署、PATH/注册表行为、升级、修复、卸载或中断恢复。目标知识库目录识别、已有数据保护、覆盖确认和失败保护仍待任务 5 实现。任务 5、任务 6 完成前不得运行该安装包。编译器输出 `Non-commercial use only`；正式商业发行前必须核实并满足 Inno Setup 7 商业许可要求。
 
 ## 16. 新功能开发前的代码定位规则
 
