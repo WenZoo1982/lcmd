@@ -42,6 +42,7 @@ extend-exclude = ["LCMD-DEV.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+ignore = ["UP042"]
 
 [tool.ruff.format]
 quote-style = "double"

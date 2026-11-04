@@ -5,7 +5,7 @@ import sys
 from collections.abc import Iterable
 from pathlib import Path
 
-from lcmd.core.paths import get_config_dir
+from lcmd.core.paths import get_config_file
 
 
 class PathSecurityError(ValueError):
@@ -36,7 +36,7 @@ def _get_install_dir() -> Path:
 def _get_protected_paths() -> tuple[Path, ...]:
     """获取禁止用作知识库位置的系统和程序目录。"""
     protected = [
-        get_config_dir(),
+        get_config_file(),
         _get_install_dir(),
     ]
 
@@ -201,6 +201,17 @@ def _validate_directory_path(
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         raise PathSecurityError("路径安全检查失败。") from exc
 
+def validate_knowledge_destination(
+    path: str | os.PathLike[str],
+    *,
+    protected_paths: Iterable[str | os.PathLike[str]] | None = None,
+) -> Path:
+    """验证知识库部署目标路径，不创建、删除或修改任何文件。"""
+    return _validate_directory_path(
+        path,
+        must_exist=False,
+        protected_paths=protected_paths,
+    )
 
 def validate_knowledge_path(
     path: str | os.PathLike[str],

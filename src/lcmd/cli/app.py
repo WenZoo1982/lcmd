@@ -9,7 +9,15 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn
 from typer.core import TyperGroup
 
 from lcmd import __version__
+from lcmd.cli.installer import (
+    check_installer_destination,
+    deploy_installer_knowledge,
+)
 from lcmd.core.config import AppConfig, ConfigError, load_config, save_config
+from lcmd.core.installer import (
+    InstallerError,
+    KnowledgeDestinationState,
+)
 from lcmd.core.migration import (
     MigrationCleanupWarning,
     MigrationConfirmationRequired,
@@ -49,6 +57,8 @@ class DynamicTyperGroup(TyperGroup):
 
     _ROOT_VALUE_OPTIONS = {
         "--path",
+         "--installer-source",    
+        "--installer-integrity",
     }
 
     _ROOT_FLAG_OPTIONS = {
@@ -354,13 +364,156 @@ def create_app() -> typer.Typer:
             "-u",
             help="更新知识库（暂未实现）。",
         ),
+                installer_check: bool = typer.Option(
+            False,
+            "--installer-check",
+            hidden=True,
+        ),
+        installer_deploy: bool = typer.Option(
+            False,
+            "--installer-deploy",
+            hidden=True,
+        ),
+        installer_replace: bool = typer.Option(
+            False,
+            "--installer-replace",
+            hidden=True,
+        ),
+        installer_source: str | None = typer.Option(
+            None,
+            "--installer-source",
+            hidden=True,
+        ),
+        installer_integrity: str | None = typer.Option(
+            None,
+            "--installer-integrity",
+            hidden=True,
+        ),
         installer_init: bool = typer.Option(
             False,
             "--installer-init",
             hidden=True,
         ),
+
+
     ) -> None:
         console = Console()
+
+        installer_operation = installer_check or installer_deploy
+
+        if (
+            installer_operation
+            or installer_replace
+            or installer_source is not None
+            or installer_integrity is not None
+        ):
+            invalid_common_options = (
+                version
+                or config
+                or path is not None
+                or platform is not None
+                or language is not None
+                or update
+                or installer_init
+                or ctx.invoked_subcommand is not None
+                or ctx.meta.get("lcmd_dynamic_arguments") is not None
+            )
+
+            valid_check = (
+                installer_check
+                and not installer_deploy
+                and not installer_replace
+                and installer_source is None
+                and installer_integrity is None
+            )
+
+            valid_deploy = (
+                installer_deploy
+                and not installer_check
+                and installer_source is not None
+                and bool(installer_source.strip())
+                and installer_integrity is not None
+                and bool(installer_integrity.strip())
+            )
+
+            if invalid_common_options or not (valid_check or valid_deploy):
+                console.print("安装器参数组合无效。", style="red")
+                raise typer.Exit(code=2)
+
+            if installer_check:
+                try:
+                    destination_state = check_installer_destination()
+                except (InstallerError, PathSecurityError, OSError) as exc:
+                    console.print(f"知识库目录检查失败：{exc}", style="red")
+                    raise typer.Exit(code=1) from None
+
+                if destination_state in (
+                    KnowledgeDestinationState.MISSING,
+                    KnowledgeDestinationState.EMPTY,
+                ):
+                    console.print("知识库安装目标可以直接部署。")
+                    raise typer.Exit(code=0)
+
+                if destination_state == KnowledgeDestinationState.VALID:
+                    console.print("安装目标已有有效知识库，需要确认替换。")
+                    raise typer.Exit(code=10)
+
+                if destination_state == KnowledgeDestinationState.INVALID:
+                    console.print("安装目标已有无效或非空内容，需要确认替换。")
+                    raise typer.Exit(code=11)
+
+                console.print("无法识别知识库安装目标状态。", style="red")
+                raise typer.Exit(code=1)
+
+            try:
+                with Progress(
+                    TextColumn("{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    console=console,
+                ) as progress:
+                    task_id = progress.add_task(
+                        "正在部署知识库",
+                        total=1,
+                    )
+
+                    def update_progress(
+                        copied_bytes: int,
+                        total_bytes: int,
+                    ) -> None:
+                        progress.update(
+                            task_id,
+                            total=max(total_bytes, 1),
+                            completed=(
+                                copied_bytes if total_bytes > 0 else 1
+                            ),
+                        )
+
+                    deployed_path = deploy_installer_knowledge(
+                        installer_source,
+                        installer_integrity,
+                        replace_existing=installer_replace,
+                        progress_callback=update_progress,
+                    )
+
+                initialized_config = initialize_installer_config(
+                    str(deployed_path),
+                )
+
+            except (
+                InstallerError,
+                PathSecurityError,
+                ConfigError,
+                OSError,
+            ) as exc:
+                console.print(f"知识库部署失败：{exc}", style="red")
+                raise typer.Exit(code=1) from None
+
+            console.print(
+                f"知识库部署及配置初始化成功：{initialized_config.knowledge_path}",
+                style="green",
+            )
+            raise typer.Exit(code=0)            
 
         if installer_init:
             if (
