@@ -10,7 +10,7 @@
 - 当前代码基线：主程序 `main` 分支，最新代码提交 `9b71b67`（`Remove automatic update functionality`）。该提交彻底移除了 CLI 自动更新入口、自动更新业务模块、更新下载/知识库更新模块及其专项测试，并同步调整发行构建脚本，不再把 `update.ps1` 纳入发行包。当前版本不提供 `lcmd --update/-u` 自动更新；用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
 - 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1–3、阶段二 Windows 安装与内部测试发行环境任务 1–6 均已完成。主程序稳定 Release `v0.1.0` 与知识库稳定 Release `v0.1.0` 均已正式发布并通过 GitHub API 核验。阶段三在线更新机制曾完成底层查询、下载和知识库事务更新实验（历史记录见 6.16–6.19），但后续因产品决策已整体取消；对应代码、CLI 入口和专项测试已在提交 `9b71b67` 中移除。当前采用 GitHub Releases 手动下载发行包、运行 `install.ps1` 安装或升级的方式。启动时只执行 `recover_migration()`，然后读取配置并加载知识库。
 - 当前程序版本：`0.1.0`
-- 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；已作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
+- 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；此前曾作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
 
 ---
 
@@ -439,7 +439,7 @@ language = "zh-CN"
 - 迁移失败会显示错误并以退出码 1 退出；旧知识库清理警告会显示给用户，但迁移仍报告成功。
 - CLI 使用 Rich 进度条显示知识库文件复制的字节百分比；该进度仅覆盖复制阶段，不代表完整性校验、配置切换和旧目录清理的整体进度。
 - 当前尚无 PowerShell 安装脚本负责部署发行包；也没有独立的备份、回滚或恢复默认路径功能。
-- `recover_migration()` 与 `recover_knowledge_update()` 均已接入启动流程；启动时先依次恢复迁移事务和知识库更新事务，再读取配置和初始化知识库。若知识库更新恢复状态不可信，CLI 会显示明确错误并以退出码 1 退出，不会继续加载知识库。
+- `recover_migration()` 已接入启动流程；启动时先恢复知识库迁移事务，再读取配置并初始化知识库。迁移恢复失败时 CLI 显示明确错误并以退出码 1 退出，不会继续加载知识库。
 
 ## 6. 当前已完成测试与验收
 
@@ -519,7 +519,7 @@ git diff --check
 
 主程序 `main` 分支当前代码提交为 `959467f`。当前代码保留 PyInstaller onedir 配置（`c333bdd`）、发行构建脚本（`c2363e2`，后由 `813558b` 增加安装脚本自动打包）、内部只读安装验证入口及 PowerShell 安装环境/路径识别脚本（`884d1ee`），并已完成首次安装、统一覆盖安装和同版本重复安装流程。用户本地当前另有尚未提交/推送的 `scripts/install.ps1` 两行动态进度显示修改；该修改不属于远程代码基线。`scripts/build-release.ps1` 已在构建时自动将仓库中的 `scripts/install.ps1` 复制为发行包根目录 `install.ps1`，并通过源文件/目标文件 SHA-256 一致性校验。当前远程 `LCMD-DEV.md` 由本次文档同步提交更新；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
 
-发行构建脚本 `scripts/build-release.ps1` 从已校验 SHA-256 的知识库 ZIP 构建发行暂存目录：重新构建 `lcmd.spec`，复制 `app` 与独立 `knowledge` 目录，生成根目录 `knowledge-integrity.json`，登记知识库文件相对路径、大小及 SHA-256，并执行逐文件和文件集合复核。清单使用 UTF-8 无 BOM；脚本拒绝覆盖已有输出目录，并在本次构建失败时清理本次创建的输出目录。提交 `813558b` 增加源安装脚本存在性检查、复制到发行包根目录 `install.ps1` 及 SHA-256 一致性校验。该清单是发行层完整性数据，不修改知识库 `manifest.json` schema，也尚未接入安装后运行时完整性检查或在线更新。
+发行构建脚本 `scripts/build-release.ps1` 从已校验 SHA-256 的知识库 ZIP 构建发行暂存目录：重新构建 `lcmd.spec`，复制 `app` 与独立 `knowledge` 目录，生成根目录 `knowledge-integrity.json`，登记知识库文件相对路径、大小及 SHA-256，并执行逐文件和文件集合复核。清单使用 UTF-8 无 BOM；脚本拒绝覆盖已有输出目录，并在本次构建失败时清理本次创建的输出目录。提交 `813558b` 增加源安装脚本存在性检查、复制到发行包根目录 `install.ps1` 及 SHA-256 一致性校验。该清单是发行层完整性数据，不修改知识库 `manifest.json` schema；当前发行包不包含自动更新功能。
 
 用户在 Windows 11 build 26300、Python 3.14.10、PyInstaller 6.22.3 环境中，使用 `lcmd-kb` 的 `v0.1.0` Pre-release ZIP（下载 SHA-256：`594df745e3087068ca910398578e281ef9002f2ccf3806f45033f55a6abb6930`）构建 `lcmd-0.1.0-beta.1-build`。实际人工验收包括：15 个知识库文件逐文件 SHA-256、已有输出目录拒绝覆盖且原内容保持不变、故障注入后自动清理本次输出目录、暂存知识库配置下 `--version`/`--config`/`dir`/`search dir` 正常，以及独立 Python 复核清单编码、版本、文件数量、文件集合、文件大小和 SHA-256 全部通过。全量 pytest 为 251 passed、4 skipped，Ruff lint/format、PowerShell Parser、`git diff --check` 和暂存区差异检查均通过。4 项 skipped 均因当前 Windows 环境不支持创建符号链接。详细证据见第 6.7 节。
 
@@ -668,7 +668,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 
 ### 8.5 Windows PowerShell 安装与升级（当前执行路线；设计已确认）
 
-Windows 安装采用 PowerShell 脚本部署 PyInstaller onedir 发行包，使用 PowerShell 控制台显示安装过程，不提供图形安装向导，不使用 Inno Setup 或其他第三方 GUI 安装框架。安装脚本负责首次安装和已有版本升级，不承担在线 Release 查询，也不替代 `lcmd --update`。安装运行依赖 Windows 自带的 PowerShell，不要求用户另行安装 Python、.NET Runtime 或其他 GUI 运行框架。
+Windows 安装采用 PowerShell 脚本部署 PyInstaller onedir 发行包，使用 PowerShell 控制台显示安装过程，不提供图形安装向导，不使用 Inno Setup 或其他第三方 GUI 安装框架。安装脚本负责首次安装和已有版本升级，不承担在线 Release 查询或自动更新；用户手动下载新版发行包后由安装脚本执行部署。安装运行依赖 Windows 自带的 PowerShell，不要求用户另行安装 Python、.NET Runtime 或其他 GUI 运行框架。
 
 #### 8.5.1 固定目录与路径规则
 
@@ -801,7 +801,7 @@ PyInstaller onedir 与 `scripts/build-release.ps1` 已保留；阶段二不重�
 ## 9. 下一阶段推进规则
 - 以第 8 节已确认设计为产品行为基线，不重复询问已确认事项。
 - 每次只推进一个关键实现问题；先核对当前源码、Git 状态和相关测试，再明确本次改动范围。
-- 阶段一、阶段二任务 1–6 均已完成。阶段三在线更新机制正在实施：任务 1（提交 `959467f`）、任务 2（提交 `27afcba`）已完成；任务 3“知识库独立更新”已完成公共文件安全工具抽取子步骤（提交 `789a8f3`，见 6.18），下一步继续实现知识库 Release 下载、安全解压、受保护目录替换和事务恢复；之后处理主程序更新、CLI 集成及阶段四完整 CLI 帮助。阶段二任务 6 的 beta.9-build-fix8 真实安装与安装后 CLI 验收记录见 6.13。任务 6 不包含复杂自动回滚/跨重启事务恢复。
+- 阶段一、阶段二任务 1–6 均已完成。阶段三在线自动更新机制已由产品决策取消；清理结果及 Windows 发行包验收见 6.20。当前后续工作按用户新需求确定；此前规划的阶段四为完整 CLI 帮助。
 - 对仍标记为待设计的实现细节，一次聚焦一个关键问题，并说明它对已确认行为的影响。
 - 修改代码前检查 Git 状态和 diff，不覆盖用户未提交修改。
 - 不擅自提交代码；代码实现与总控文档维护分开。
@@ -1450,10 +1450,10 @@ beta.9-build-fix8 真实发行构建与安装验收（用户在 Windows 11 build
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `27afcba`（`feat: add release asset download and verification`）。此前 `64a7cf4` 已使 `scripts/build-release.ps1` 支持稳定版构建：`Prerelease` 参数可省略并默认为空字符串，非空时仍执行原格式校验；稳定版构建日志显示“发行类型：稳定版”，完整性清单保留 `main_prerelease` 字段并写入空字符串。当前 `src/lcmd/core/update.py` 已实现 GitHub 最新稳定 Release 元数据查询与本地版本比较；`src/lcmd/core/update_download.py` 已实现发行资产下载、大小/SHA-256/ZIP 完整性验证及下载文件原子落盘。上述模块尚未接入 CLI，也未执行知识库或主程序替换。
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1、2、3 均已完成。阶段二 Windows PowerShell 安装与内部测试发行环境任务 1–6 均已完成：任务 1 设计完成；任务 2 安装环境与路径识别已实现并验收（提交 `884d1ee`）；任务 3 发行包完整性验证与部署准备已完成（提交 `813558b`）；任务 4 首次安装已实现并完成真实安装及安装后 CLI 验收（提交 `8ecbaaf`）；任务 5 首次安装、重复安装及已有版本统一覆盖安装已实现并完成 beta.7-build 真实验收（提交 `f57c3be`）；任务 6 安装器最终交互与 Windows 内部测试发行验证已完成 beta.9-build-fix8 真实安装验收。安装器固定两行动态进度、开始/成功/失败区域居中显示及最终文案已完成真实运行验收；安装后重新打开 PowerShell，`lcmd --help` 正常，确认当前用户 PATH 配置有效。此前在旧 PowerShell 窗口中测试时未刷新环境变量，导致一次 `lcmd` 未识别；重新打开终端后正常，属于测试窗口未刷新，不是安装器缺陷。安装器每次均按当前安装包重建主程序、官方标准知识库和默认配置；不主动删除标准目录外的旧自定义知识库目录。复杂自动回滚/跨重启事务恢复不属于当前安装器设计目标，安装失败后允许用户重新运行安装包。阶段二当前任务状态以 8.5.6 节为准。阶段三在线更新机制正在实施：任务 1“GitHub 稳定 Release 查询与版本比较”已完成（提交 `959467f`），任务 2“发行包下载与完整性验证”已完成并推送（提交 `27afcba`）；下一步为任务 3“知识库独立更新”。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `9b71b67`（`Remove automatic update functionality`）。自动更新 CLI、查询/下载/知识库更新模块及其专项测试已移除；发行构建不再打包 `update.ps1`。当前通过 GitHub Releases 手动下载新版发行包，并运行包内安装器完成安装或升级。
+- 当前阶段：P6 架构及跨平台验收、阶段一路径迁移和阶段二 Windows 安装发行环境均已完成。阶段三在线自动更新机制已由产品决策取消，相关代码清理和 Windows 发行包实际安装验收见 6.20。当前升级方式为 GitHub Releases 手动下载发行包并运行 `install.ps1`。启动时先调用 `recover_migration()`，再读取配置和加载知识库。
 - 当前程序版本：`0.1.0`
-- 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；已作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
+- 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；此前曾作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
 
 ---
 
@@ -1777,7 +1777,6 @@ src/lcmd/
 | `lcmd -c --language en-US` / `lcmd -c -l en-US` | 验证并切换语言，成功后持久化 |
 | `lcmd -c -p linux -l zh-CN` | 验证最终平台/语言组合后一次性保存配置 |
 | `lcmd -c --path <目录>` | 调用 `migrate_knowledge()` 迁移知识库；目标已存在时询问是否覆盖，显示复制字节百分比进度、迁移成功/失败及旧目录清理警告 |
-| `lcmd --update` / `-u` | 当前仍显示“知识库更新功能尚未实现”；底层已具备稳定 Release 检查及发行资产下载/完整性验证能力，但尚未接入 CLI |
 
 | `lcmd <command>` | 查询当前平台/语言的知识文档 |
 | `lcmd <tool>` | 显示工具入口页和可用子命令；无入口页时按单篇/多篇规则处理 |
@@ -1963,7 +1962,7 @@ git diff --check
 
 主程序 `main` 分支当前代码提交为 `959467f`。当前代码保留 PyInstaller onedir 配置（`c333bdd`）、发行构建脚本（`c2363e2`，后由 `813558b` 增加安装脚本自动打包）、内部只读安装验证入口及 PowerShell 安装环境/路径识别脚本（`884d1ee`），并已完成首次安装、统一覆盖安装和同版本重复安装流程。用户本地当前另有尚未提交/推送的 `scripts/install.ps1` 两行动态进度显示修改；该修改不属于远程代码基线。`scripts/build-release.ps1` 已在构建时自动将仓库中的 `scripts/install.ps1` 复制为发行包根目录 `install.ps1`，并通过源文件/目标文件 SHA-256 一致性校验。当前远程 `LCMD-DEV.md` 由本次文档同步提交更新；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
 
-发行构建脚本 `scripts/build-release.ps1` 从已校验 SHA-256 的知识库 ZIP 构建发行暂存目录：重新构建 `lcmd.spec`，复制 `app` 与独立 `knowledge` 目录，生成根目录 `knowledge-integrity.json`，登记知识库文件相对路径、大小及 SHA-256，并执行逐文件和文件集合复核。清单使用 UTF-8 无 BOM；脚本拒绝覆盖已有输出目录，并在本次构建失败时清理本次创建的输出目录。提交 `813558b` 增加源安装脚本存在性检查、复制到发行包根目录 `install.ps1` 及 SHA-256 一致性校验。该清单是发行层完整性数据，不修改知识库 `manifest.json` schema，也尚未接入安装后运行时完整性检查或在线更新。
+发行构建脚本 `scripts/build-release.ps1` 从已校验 SHA-256 的知识库 ZIP 构建发行暂存目录：重新构建 `lcmd.spec`，复制 `app` 与独立 `knowledge` 目录，生成根目录 `knowledge-integrity.json`，登记知识库文件相对路径、大小及 SHA-256，并执行逐文件和文件集合复核。清单使用 UTF-8 无 BOM；脚本拒绝覆盖已有输出目录，并在本次构建失败时清理本次创建的输出目录。提交 `813558b` 增加源安装脚本存在性检查、复制到发行包根目录 `install.ps1` 及 SHA-256 一致性校验。该清单是发行层完整性数据，不修改知识库 `manifest.json` schema；当前发行包不包含自动更新功能。
 
 用户在 Windows 11 build 26300、Python 3.14.10、PyInstaller 6.22.3 环境中，使用 `lcmd-kb` 的 `v0.1.0` Pre-release ZIP（下载 SHA-256：`594df745e3087068ca910398578e281ef9002f2ccf3806f45033f55a6abb6930`）构建 `lcmd-0.1.0-beta.1-build`。实际人工验收包括：15 个知识库文件逐文件 SHA-256、已有输出目录拒绝覆盖且原内容保持不变、故障注入后自动清理本次输出目录、暂存知识库配置下 `--version`/`--config`/`dir`/`search dir` 正常，以及独立 Python 复核清单编码、版本、文件数量、文件集合、文件大小和 SHA-256 全部通过。全量 pytest 为 251 passed、4 skipped，Ruff lint/format、PowerShell Parser、`git diff --check` 和暂存区差异检查均通过。4 项 skipped 均因当前 Windows 环境不支持创建符号链接。详细证据见第 6.7 节。
 
@@ -2112,7 +2111,7 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 
 ### 8.5 Windows PowerShell 安装与升级（当前执行路线；设计已确认）
 
-Windows 安装采用 PowerShell 脚本部署 PyInstaller onedir 发行包，使用 PowerShell 控制台显示安装过程，不提供图形安装向导，不使用 Inno Setup 或其他第三方 GUI 安装框架。安装脚本负责首次安装和已有版本升级，不承担在线 Release 查询，也不替代 `lcmd --update`。安装运行依赖 Windows 自带的 PowerShell，不要求用户另行安装 Python、.NET Runtime 或其他 GUI 运行框架。
+Windows 安装采用 PowerShell 脚本部署 PyInstaller onedir 发行包，使用 PowerShell 控制台显示安装过程，不提供图形安装向导，不使用 Inno Setup 或其他第三方 GUI 安装框架。安装脚本负责首次安装和已有版本升级，不承担在线 Release 查询或自动更新；用户手动下载新版发行包后由安装脚本执行部署。安装运行依赖 Windows 自带的 PowerShell，不要求用户另行安装 Python、.NET Runtime 或其他 GUI 运行框架。
 
 #### 8.5.1 固定目录与路径规则
 
