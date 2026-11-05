@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `5a1c14a`；当前代码保留 PyInstaller onedir 打包配置、发行构建脚本及内部只读安装配置验证入口。
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1、2、3 均已完成。阶段二 Windows PowerShell 安装与内部测试发行环境处于实施阶段：任务 1 设计完成；任务 3 发行构建层完成；任务 2 已实现并验收内部只读配置/知识库验证入口，但 PowerShell 安装环境、路径识别及安装身份标记仍待实现。下一步继续任务 2 的 PowerShell 路径识别与环境检查。阶段三为在线更新，阶段四为完整 CLI 帮助。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `884d1ee`；当前代码保留 PyInstaller onedir 打包配置、发行构建脚本、内部只读安装验证入口及 PowerShell 安装环境/路径识别脚本。
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1、2、3 均已完成。阶段二 Windows PowerShell 安装与内部测试发行环境处于实施阶段：任务 1 设计完成；任务 2 的 PowerShell 安装环境与路径识别已实现并完成只读验收（提交 `884d1ee`）；任务 3 的发行构建层已完成，下一步将修改 `scripts/build-release.ps1`，使发行包自动包含根目录 `install.ps1` 并完成构建验收。之后再实施首次安装、已有版本升级及事务恢复。阶段三为在线更新，阶段四为完整 CLI 帮助。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的 Pre-release `v0.1.0`；当前内容为 13 篇 integration fixtures，不是完整正式命令目录。阶段二任务 3 已将该测试知识库作为内部打包样本随包部署并完成校验，不代表正式知识库内容验收完成）
 
@@ -524,7 +524,7 @@ git diff --check
 
 ## 7. 当前仓库与同步基线
 
-主程序 `main` 分支当前代码提交为 `5a1c14a`。当前代码保留 PyInstaller onedir 配置（`c333bdd`）、发行构建脚本（`c2363e2`）和内部只读安装配置验证入口（`5a1c14a`）；PowerShell 安装脚本尚未实现。当前远程 `LCMD-DEV.md` 由本次文档同步提交更新；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
+主程序 `main` 分支当前代码提交为 `884d1ee`。当前代码保留 PyInstaller onedir 配置（`c333bdd`）、发行构建脚本（`c2363e2`）、内部只读安装验证入口及 PowerShell 安装环境/路径识别脚本（`884d1ee`）。`scripts/install.ps1` 已进入源码仓库；当前 `scripts/build-release.ps1` 尚未自动将其复制到发行包根目录。当前远程 `LCMD-DEV.md` 由本次文档同步提交更新；文档提交完成后，用户再在本地执行 `git pull --ff-only origin main`。
 
 本次代码提交新增 `scripts/build-release.ps1`，用于从已校验 SHA-256 的知识库 ZIP 构建发行暂存目录：重新构建 `lcmd.spec`，复制 `app` 与独立 `knowledge` 目录，生成根目录 `knowledge-integrity.json`，登记知识库文件相对路径、大小及 SHA-256，并执行逐文件和文件集合复核。清单使用 UTF-8 无 BOM；脚本拒绝覆盖已有输出目录，并在本次构建失败时清理本次创建的输出目录。该清单是发行层完整性数据，不修改知识库 `manifest.json` schema，也尚未接入安装后运行时完整性检查或在线更新。
 
@@ -548,7 +548,7 @@ git diff --check
 
 任务 1 提交：`dc192a8268eb2f3ddbbac52c26e6e896d1121a98`。任务 2 最近提交：`6ad27f3`。任务 3 提交：`1f28b23`。本轮启动恢复通过自动化测试验证；未进行真实迁移日志/磁盘清理的人工故障注入验收。
 
-**阶段二：Windows PowerShell 安装与内部测试发行环境（当前阶段，设计已确认，部分能力已实现）。** 使用 PowerShell 脚本部署现有 PyInstaller onedir 发行包。主程序固定安装到 `%LOCALAPPDATA%\\Programs\\LCMD`；知识库目录独立且允许自定义。安装/升级流程设计已确认；发行包构建及离线完整性清单验证已实现并验收（见 6.7）；内部只读配置/知识库验证入口已实现并完成 beta.2-build EXE 验收（见 6.8）。当前继续任务 2 的 PowerShell 安装环境与路径识别实现，随后再实现首次安装、已有版本升级和事务恢复。具体流程及任务拆分见 8.5.1–8.5.6。
+**阶段二：Windows PowerShell 安装与内部测试发行环境（当前阶段，任务 1、2 已完成，任务 3 收尾中）。** 使用 PowerShell 脚本部署现有 PyInstaller onedir 发行包。主程序固定安装到 `%LOCALAPPDATA%\\Programs\\LCMD`；知识库目录独立且允许自定义。安装/升级流程设计已确认；发行包构建及离线完整性清单验证已实现并验收（见 6.7）；内部只读配置/知识库验证入口已实现并完成 beta.3-build EXE 验收（见 6.8、6.9）。PowerShell 安装环境与路径识别脚本已实现并完成只读验收（见 6.9）。当前下一步是让 `scripts/build-release.ps1` 自动将 `scripts/install.ps1` 作为 `install.ps1` 放入发行包根目录，并验收自动打包；之后再实现首次安装、已有版本升级和事务恢复。具体流程及任务拆分见 8.5.1–8.5.6。
 
 **当前尚未实现：** PowerShell 安装脚本、安装/升级部署、安装失败恢复、主程序/知识库在线更新机制及最终完整帮助信息。以上设计已经确认，不代表代码已经实现。
 
@@ -741,18 +741,20 @@ Windows 安装采用 PowerShell 脚本部署 PyInstaller onedir 发行包。安�
 #### 8.5.6 阶段二任务拆分与验收边界
 
 1. **任务 1：安装脚本职责、目录规则与安装/升级流程设计。** 已完成，设计见 8.5.1–8.5.5。
-2. **任务 2：PowerShell 安装环境与路径识别。** 设计与代码调查已完成，实施中。固定主程序目录、安装身份标记、配置文件路径、知识库路径优先级、目录身份分类和异常安全停止规则均已确认。已实现内部只读验证入口并通过 beta.2-build EXE 验收；PowerShell 侧固定目录/marker/配置与知识库路径识别仍待实施。当前调查已核对：
-   - `core/paths.py` 的实际配置目录由 `platformdirs` 返回；Windows 当前用户环境实测为 `%LOCALAPPDATA%\lcmd\config.toml`，默认知识库路径为 `%LOCALAPPDATA%\lcmd\knowledge`。不得将配置目录误写为 `%APPDATA%`。
-   - `core/config.py` 的 `load_config()` 可复用来读取并校验现有 TOML；`core/path_security.py` 的 `validate_knowledge_path()` 可复用来验证知识库路径安全性及基础目录/Manifest 结构。
-   - 现有 `cli/app.py` 的 `initialize_state()` 不是只读验证入口：它先调用 `recover_migration()`，并可能初始化/保存配置；知识库加载错误还可能被转换成不可用状态。因此安装验证不得直接调用 `initialize_state()`。
-   - 启动链路为 `__main__.py -> main.main() -> create_app() -> Typer app()`。普通 Typer 根 callback 会进行有副作用的初始化；验证模式必须在普通 CLI 初始化之前分流。
-   - 已确认的实现方向：增加专用内部只读验证入口，由打包后的 `lcmd.exe` 供 PowerShell 安装脚本调用。入口读取指定配置文件，要求文件存在且通过 `load_config()` 校验，再调用 `validate_knowledge_path()`；不得调用 `recover_migration()`、`initialize_state()` 或任何配置保存/目录创建逻辑。失败时输出可诊断原因并返回非零退出码。具体参数形式和输出协议在编码任务中确定，不能让普通用户命令行为发生变化。
-   - **已完成的内部验证入口实现（提交 `5a1c14a`）：** `src/lcmd/main.py` 在普通 `create_app()` 启动前识别 `--internal-validate-config <配置文件完整路径>`，只调用 `load_config()` 和 `validate_knowledge_path()`；不调用 `initialize_state()`、`recover_migration()` 或配置写入逻辑。成功输出 `LCMD_INSTALL_VALIDATION=OK` 并返回 0；配置/知识库验证失败输出 `LCMD_INSTALL_VALIDATION=ERROR` 和具体原因并返回 1；参数错误显示用法并返回 2。普通 CLI 启动路径保持不变。
-   - 自动化测试：`tests/test_cli.py` 本轮 64 passed；全量 pytest 273 passed；Ruff lint 和目标文件 format check 通过。
-   - **beta.2-build EXE 人工验收：** `scripts/build-release.ps1` 成功生成 `D:\Project_DEV\lcmd-releases\lcmd-0.1.0-beta.2-build`，构建退出码 0；打包 EXE 的有效配置验证返回 `LCMD_INSTALL_VALIDATION=OK`、退出码 0；`--version` 和 `--help` 正常。6 项错误输入测试全部通过：配置不存在、TOML 格式错误、知识库目录不存在均返回 1；缺少参数、空参数、多余参数均返回 2。PowerShell 5.1 捕获原生 EXE stderr 时显示 `NativeCommandError` 记录，但实际退出码和测试断言符合约定。
-   - **只读性人工验收：** 验证前后配置 SHA-256、文件大小和修改时间不变；知识库 162 个文件的路径、大小、修改时间和 SHA-256 完全一致，差异数量 0，`READ_ONLY_CHECK=PASS`。
-   - 以上仅完成内部验证入口及其打包验收，不代表 PowerShell 路径识别、marker 校验或整个任务 2 完成。剩余实施仍包括固定主程序目录识别、marker + onedir 关键文件联合确认、配置/知识库路径优先级与目录身份分类、异常时安全停止及可操作错误指引。
-3. **任务 3：发行包完整性验证与部署准备。** 已完成构建层实现及人工验收，见 6.7。`scripts/build-release.ps1` 已生成 `app/`、`knowledge/` 和 `knowledge-integrity.json`，并完成发行清单与知识库文件集合、大小、SHA-256 的复核。注意：这证明构建暂存目录的完整性校验，不等于安装器运行时验证、实际安装或升级已完成。
+2. **任务 2：PowerShell 安装环境与路径识别。** 已完成实现和只读验收，代码提交 `884d1ee`（`feat: add Windows install environment validation`），已推送到 `origin/main`。实现文件为 `scripts/install.ps1`，并复用打包 EXE 的内部只读验证入口。当前脚本只识别发行包、固定安装目录、安装身份标记、配置文件和知识库路径，不执行安装、升级、复制、删除或写入操作。
+   - 发行包检查：检查 `app/lcmd.exe`、非空 `app/_internal`、随包 `knowledge/` 和 `knowledge-integrity.json`；调用 EXE 的 `--internal-validate-knowledge` 验证随包知识库。
+   - 固定主程序目录：`%LOCALAPPDATA%\\Programs\\LCMD`；识别 `NOT_EXISTS`、`EMPTY_DIRECTORY`、`VALID_LCMD_INSTALL`、`UNKNOWN_INVALID`。
+   - 安装标记：根目录 `.lcmd-install.json`；严格校验四个字段、产品标识 `WenZoo.LCMD`、`marker_version=1`、三段式主程序版本、固定安装目录身份，并联合检查 `lcmd.exe` 与非空 `_internal`。
+   - 配置目录按 Windows 实测的 platformdirs 路径定位为 `%LOCALAPPDATA%\\lcmd\\config.toml`。配置存在时优先使用 CONFIG，并通过 EXE 内部入口读取及验证；配置存在但损坏或其知识库无效时立即停止，不回退注册表或默认目录。
+   - 仅当配置文件不存在时，按 REGISTRY、DEFAULT 顺序寻找知识库路径。注册表值无效时允许继续默认路径；默认目录仅允许不存在、空目录或有效知识库，普通文件、不可访问路径及无效非空目录均安全停止。
+   - 知识库路径分类覆盖 `NOT_EXISTS`、`NOT_DIRECTORY`、`EMPTY_DIRECTORY`、`VALID_KNOWLEDGE`、`INVALID_NONEMPTY_DIRECTORY`、`INACCESSIBLE` 和 `INVALID_PATH`。
+   - 测试覆盖 marker 缺失/损坏/产品标识不符/格式版本不支持/安装目录不符/主程序版本格式错误/缺少字段/多余字段；主程序 EXE 缺失、`_internal` 缺失或为空；配置损坏、配置知识库不存在；CONFIG 优先、REGISTRY 优先、注册表无效回退 DEFAULT；默认知识库空目录、路径为普通文件等分支。以上异常测试均按预期安全停止，模拟环境恢复。
+   - beta.3-build 发行 EXE 的三个内部入口均完成真实运行验收：`--internal-validate-config`、`--internal-inspect-config`、`--internal-validate-knowledge`。有效配置/知识库返回成功；缺失路径和缺少参数等异常按约定返回非零退出码。
+   - 最终真实环境只读性复核：配置文件 SHA-256、知识库 162 个文件的路径/大小/修改时间/SHA-256，以及注册表状态在运行前后均未变化；`READ_ONLY_REVIEW=PASS`。
+   - 最终 PowerShell Parser 检查通过；源码与 beta.3-build 副本 SHA-256 一致（`D0A18597CEA234BC33AB01A0985349198AC9D6C4FF29047CADF6187A5EBAC4DB`）。
+   - 自动化测试：`tests/test_cli.py` 76 passed；全量 pytest 285 passed；Ruff lint 通过；Ruff format 检查为 2 files already formatted。
+   - **验收边界：** 当前 `install.ps1` 仍为只读识别脚本，不创建安装目录、不部署程序或知识库、不初始化配置、不更新注册表，也不执行首次安装/升级/回滚。
+3. **任务 3：发行包完整性验证与部署准备。** 构建层实现及人工验收已完成，见 6.7；`scripts/build-release.ps1` 已生成 `app/`、`knowledge/` 和 `knowledge-integrity.json`，并完成发行清单与知识库文件集合、大小、SHA-256 的复核。当前收尾子任务：修改构建脚本，使仓库中的 `scripts/install.ps1` 自动复制到发行包根目录并命名为 `install.ps1`，随后重新构建全新输出目录并验证脚本存在、内容一致、可通过 PowerShell Parser 检查。此项完成前，任务 3 整体仍标记为进行中。注意：构建暂存目录完整性校验不等于安装器运行时验证、实际安装或升级已完成。
 4. **任务 4：首次安装。** 待实现：部署主程序和知识库，初始化配置及辅助路径记录。
 5. **任务 5：已有版本升级。** 待实现：保护现有配置和知识库，执行受保护替换。
 6. **任务 6：中断恢复、失败回滚与 Windows 内部测试发行验收。** 待实现：故障注入、重复运行、首次安装和升级实测。
@@ -813,7 +815,7 @@ PyInstaller onedir 与 `scripts/build-release.ps1` 已保留；阶段二不重�
 ## 9. 下一阶段推进规则
 - 以第 8 节已确认设计为产品行为基线，不重复询问已确认事项。
 - 每次只推进一个关键实现问题；先核对当前源码、Git 状态和相关测试，再明确本次改动范围。
-- 阶段一已完成。当前先完成阶段二 Windows PowerShell 安装与内部测试发行环境，再进入阶段三在线更新，之后处理阶段四完整 CLI 帮助。
+- 阶段一已完成。当前先完成阶段二 Windows PowerShell 安装与内部测试发行环境：任务 1、2 已完成，任务 3 先完成 install.ps1 自动打包收尾，再进入任务 4 首次安装、任务 5 已有版本升级和任务 6 中断恢复/失败回滚验收；之后进入阶段三在线更新，再处理阶段四完整 CLI 帮助。
 - 对仍标记为待设计的实现细节，一次聚焦一个关键问题，并说明它对已确认行为的影响。
 - 修改代码前检查 Git 状态和 diff，不覆盖用户未提交修改。
 - 不擅自提交代码；代码实现与总控文档维护分开。
@@ -1298,6 +1300,26 @@ PyInstaller 发行 EXE 人工验收：
 
 **验收边界：** 该入口只负责只读验证指定配置及其知识库，不负责确定安装路径、不检查 `.lcmd-install.json`、不识别或部署安装目录，也不执行首次安装/升级。它是阶段二任务 2 的一个已完成子项，不能据此将整个任务 2 标记为完成。
 
+
+### 6.9 Windows 11 PowerShell 安装环境与路径识别只读验收（提交 `884d1ee`）
+
+用户在 Windows 11、PowerShell 5.1 环境中实现 `scripts/install.ps1`，并在 `lcmd-0.1.0-beta.3-build` 发行暂存目录中执行验收。该脚本当前仅进行只读环境识别，不执行首次安装、升级、文件部署、配置初始化或回滚。
+
+验收覆盖：
+
+- 发行包结构和随包知识库验证；
+- 固定主程序安装目录状态分类及 `.lcmd-install.json` 严格校验；
+- onedir 关键文件缺失/空目录检测；
+- 配置存在时 CONFIG 优先，配置损坏或其知识库无效时立即停止且不回退；
+- 配置不存在时 REGISTRY 优先、无效注册表记录回退 DEFAULT；
+- 知识库不存在、普通文件、空目录、有效目录、无效非空目录等状态；
+- marker 缺失、JSON 损坏、产品标识不匹配、marker 格式版本不支持、安装目录身份不匹配、主程序版本格式错误、必需字段缺失和多余字段等异常分支。
+
+以上测试均得到预期结果，模拟测试环境在测试后恢复。beta.3-build EXE 的 `--internal-validate-config`、`--internal-inspect-config`、`--internal-validate-knowledge` 三个入口均完成真实运行验收。最终真实环境只读复核确认配置文件、知识库 162 个文件及注册表状态运行前后未变化（`READ_ONLY_REVIEW=PASS`）。
+
+最终 PowerShell Parser 检查通过；源码 `scripts/install.ps1` 与 beta.3-build 根目录副本 SHA-256 一致：`D0A18597CEA234BC33AB01A0985349198AC9D6C4FF29047CADF6187A5EBAC4DB`。自动化测试：`tests/test_cli.py` 76 passed，全量 pytest 285 passed，Ruff lint 通过，Ruff format 检查为 2 files already formatted。
+
+**验收边界：** 本轮证明安装环境与路径识别逻辑及其只读性，不证明真实安装、升级、配置写入、注册表更新、事务恢复或失败回滚。beta.3-build 中的 `install.ps1` 目前由用户手动复制；构建脚本自动打包仍是任务 3 的下一项工作。
 
 
 ## 16. 新功能开发前的代码定位规则
