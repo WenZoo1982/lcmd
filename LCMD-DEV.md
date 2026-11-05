@@ -517,7 +517,7 @@ git diff --check
 
 ## 7. 当前仓库与同步基线
 
-主程序 `main` 分支当前代码提交为 `9b71b67`（`Remove automatic update functionality`）；本次总控文档同步提交为 `483ed42`。当前代码保留 PyInstaller onedir 配置、发行构建脚本、PowerShell 安装脚本及安装环境/路径识别能力，并已完成首次安装、覆盖安装、重复安装和最终安装器交互验收。此前确认的 `scripts/install.ps1` 居中布局与成功提示修改已随 `9b71b67` 一并提交。`scripts/build-release.ps1` 自动将仓库中的 `scripts/install.ps1` 复制为发行包根目录 `install.ps1`，并通过源文件/目标文件 SHA-256 一致性校验；该构建脚本现已不再复制或校验 `update.ps1`。当前远程 `LCMD-DEV.md` 已更新；用户随后在本地执行 `git pull --ff-only origin main` 同步文档提交。
+主程序 `main` 分支当前代码提交为 `9b71b67`（`Remove automatic update functionality`）。当前代码保留 PyInstaller onedir 配置、发行构建脚本、PowerShell 安装脚本及安装环境/路径识别能力，并已完成首次安装、覆盖安装、重复安装和最终安装器交互验收。此前确认的 `scripts/install.ps1` 居中布局与成功提示修改已随 `9b71b67` 一并提交。`scripts/build-release.ps1` 自动将仓库中的 `scripts/install.ps1` 复制为发行包根目录 `install.ps1`，并通过源文件/目标文件 SHA-256 一致性校验；该构建脚本现已不再复制或校验 `update.ps1`。当前远程 `LCMD-DEV.md` 已更新；用户随后在本地执行 `git pull --ff-only origin main` 同步文档提交。
 
 发行构建脚本 `scripts/build-release.ps1` 从已校验 SHA-256 的知识库 ZIP 构建发行暂存目录：重新构建 `lcmd.spec`，复制 `app` 与独立 `knowledge` 目录，生成根目录 `knowledge-integrity.json`，登记知识库文件相对路径、大小及 SHA-256，并执行逐文件和文件集合复核。清单使用 UTF-8 无 BOM；脚本拒绝覆盖已有输出目录，并在本次构建失败时清理本次创建的输出目录。提交 `813558b` 增加源安装脚本存在性检查、复制到发行包根目录 `install.ps1` 及 SHA-256 一致性校验。该清单是发行层完整性数据，不修改知识库 `manifest.json` schema；当前发行包不包含自动更新功能。
 
@@ -1960,7 +1960,7 @@ git diff --check
 
 ## 7. 当前仓库与同步基线
 
-主程序 `main` 分支当前代码提交为 `9b71b67`（`Remove automatic update functionality`）；本次总控文档同步提交为 `79f7abf`。当前代码保留 PyInstaller onedir 配置、发行构建脚本、PowerShell 安装脚本及安装环境/路径识别能力，并已完成首次安装、覆盖安装、重复安装和最终安装器交互验收。此前确认的 `scripts/install.ps1` 居中布局与成功提示修改已随 `9b71b67` 一并提交。`scripts/build-release.ps1` 自动将仓库中的 `scripts/install.ps1` 复制为发行包根目录 `install.ps1`，并通过源文件/目标文件 SHA-256 一致性校验；该构建脚本现已不再复制或校验 `update.ps1`。当前远程 `LCMD-DEV.md` 已更新；用户随后在本地执行 `git pull --ff-only origin main` 同步文档提交。
+主程序 `main` 分支当前代码提交为 `9b71b67`（`Remove automatic update functionality`）。当前代码保留 PyInstaller onedir 配置、发行构建脚本、PowerShell 安装脚本及安装环境/路径识别能力，并已完成首次安装、覆盖安装、重复安装和最终安装器交互验收。此前确认的 `scripts/install.ps1` 居中布局与成功提示修改已随 `9b71b67` 一并提交。`scripts/build-release.ps1` 自动将仓库中的 `scripts/install.ps1` 复制为发行包根目录 `install.ps1`，并通过源文件/目标文件 SHA-256 一致性校验；该构建脚本现已不再复制或校验 `update.ps1`。当前远程 `LCMD-DEV.md` 已更新；用户随后在本地执行 `git pull --ff-only origin main` 同步文档提交。
 
 发行构建脚本 `scripts/build-release.ps1` 从已校验 SHA-256 的知识库 ZIP 构建发行暂存目录：重新构建 `lcmd.spec`，复制 `app` 与独立 `knowledge` 目录，生成根目录 `knowledge-integrity.json`，登记知识库文件相对路径、大小及 SHA-256，并执行逐文件和文件集合复核。清单使用 UTF-8 无 BOM；脚本拒绝覆盖已有输出目录，并在本次构建失败时清理本次创建的输出目录。提交 `813558b` 增加源安装脚本存在性检查、复制到发行包根目录 `install.ps1` 及 SHA-256 一致性校验。该清单是发行层完整性数据，不修改知识库 `manifest.json` schema；当前发行包不包含自动更新功能。
 
