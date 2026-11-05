@@ -308,6 +308,7 @@ def test_validate_migration_target_rejects_junction(tmp_path):
             protected_paths=[tmp_path / "protected"],
         )
 
+
 def test_validate_knowledge_path_accepts_default_knowledge_path(
     tmp_path,
     monkeypatch,

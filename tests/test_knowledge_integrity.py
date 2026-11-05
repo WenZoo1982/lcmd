@@ -11,10 +11,10 @@ from lcmd.core.knowledge_integrity import (
     verify_knowledge_distribution,
 )
 
-
 # ---------------------------------------------------------------------------
 # ????????????
 # ---------------------------------------------------------------------------
+
 
 def _write_distribution(
     base_dir: Path,

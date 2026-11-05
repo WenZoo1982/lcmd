@@ -11,7 +11,6 @@ from typing import Any
 
 from lcmd.knowledge.loader import KnowledgeLoadError, discover_catalog
 
-
 _VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 _PRERELEASE_PATTERN = re.compile(r"^[a-zA-Z0-9.-]+$")
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -197,7 +196,9 @@ def _collect_actual_files(root: Path) -> dict[str, Path]:
                     raise KnowledgeIntegrityError(f"无法检查知识库目录：{directory_path}") from exc
 
                 if not stat.S_ISDIR(directory_stat.st_mode) or _is_reparse_point(directory_stat):
-                    raise KnowledgeIntegrityError(f"知识库中存在符号链接或非普通目录：{directory_path}")
+                    raise KnowledgeIntegrityError(
+                        f"知识库中存在符号链接或非普通目录：{directory_path}"
+                    )
 
             for file_name in file_names:
                 file_path = current_path / file_name

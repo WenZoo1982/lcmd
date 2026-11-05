@@ -225,8 +225,6 @@ def switch_configuration(
     )
 
 
-
-
 def _show_configuration(state: AppState, console: Console) -> None:
     console.print(f"知识库路径：{state.config.knowledge_path}")
     console.print(f"当前平台：{state.config.platform}")

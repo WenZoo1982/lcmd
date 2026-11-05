@@ -129,11 +129,15 @@ def save_config(config: AppConfig, path: Path) -> None:
 def initialize_config(
     knowledge_path: str | Path,
     config_file: Path | None = None,
+    *,
+    platform: str = "windows",
+    language: str = "zh-CN",
 ) -> AppConfig:
     """Initialize or update LCMD configuration for a knowledge directory.
 
-    Only the knowledge path is changed. Existing platform and language
-    preferences are preserved. Knowledge files are not copied or modified.
+    For a new configuration, use the supplied platform and language.
+    For an existing configuration, preserve its platform and language.
+    Knowledge files are not copied or modified.
     """
     from lcmd.core.path_security import validate_knowledge_path
 
@@ -144,7 +148,12 @@ def initialize_config(
 
         config_file = get_config_file()
 
-    if config_file.is_file():
+    config_file = Path(config_file)
+
+    if config_file.exists():
+        if not config_file.is_file():
+            raise ConfigError("配置文件路径存在，但不是普通文件。")
+
         config = load_config(config_file)
         new_config = AppConfig(
             knowledge_path=validated_path,
@@ -152,7 +161,11 @@ def initialize_config(
             language=config.language,
         )
     else:
-        new_config = AppConfig(knowledge_path=validated_path)
+        new_config = AppConfig(
+            knowledge_path=validated_path,
+            platform=platform,
+            language=language,
+        )
 
     save_config(new_config, config_file)
     return new_config
