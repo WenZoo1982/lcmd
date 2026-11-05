@@ -1,5 +1,4 @@
-﻿
-param(
+﻿param(
     [Parameter(Mandatory = $true)]
     [string]$MainVersion,
 
@@ -22,6 +21,7 @@ Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $repoRoot ".venv\Scripts\python.exe"
 $specFile = Join-Path $repoRoot "lcmd.spec"
+$installScript = Join-Path $PSScriptRoot "install.ps1"
 
 $outputCreated = $false
 $buildSucceeded = $false
@@ -46,6 +46,10 @@ try {
 
     if (-not (Test-Path $specFile -PathType Leaf)) {
         throw "未找到 PyInstaller 配置：$specFile"
+    }
+
+    if (-not (Test-Path $installScript -PathType Leaf)) {
+        throw "未找到安装脚本：$installScript"
     }
 
     if (-not (Test-Path $KnowledgeArchive -PathType Leaf)) {
@@ -85,6 +89,7 @@ try {
 
     Write-Host "主程序版本：$MainVersion"
     Write-Host "Pre-release：$Prerelease"
+    Write-Host "安装脚本：$installScript"
 
     Write-Host "`n========== 知识库 ZIP 校验 ==========" -ForegroundColor Cyan
 
@@ -193,9 +198,28 @@ try {
 
         $appDir = Join-Path $outputPath "app"
         $knowledgeDir = Join-Path $outputPath "knowledge"
+        $installScriptTarget = Join-Path $outputPath "install.ps1"
 
         Copy-Item -Path $distDir -Destination $appDir -Recurse
         Copy-Item -Path $knowledgeSource -Destination $knowledgeDir -Recurse
+
+        Write-Host "`n========== 复制并验证安装脚本 ==========" -ForegroundColor Cyan
+
+        Copy-Item -LiteralPath $installScript -Destination $installScriptTarget
+
+        if (-not (Test-Path $installScriptTarget -PathType Leaf)) {
+            throw "发行包缺少 install.ps1。"
+        }
+
+        $sourceInstallHash = (Get-FileHash $installScript -Algorithm SHA256).Hash
+        $targetInstallHash = (Get-FileHash $installScriptTarget -Algorithm SHA256).Hash
+
+        if ($sourceInstallHash -ne $targetInstallHash) {
+            throw "发行包 install.ps1 与源安装脚本 SHA-256 不一致。"
+        }
+
+        Write-Host "安装脚本复制及 SHA-256 校验通过。" -ForegroundColor Green
+        Write-Host "安装脚本 SHA-256：$targetInstallHash"
 
         $copiedFiles = @(
             Get-ChildItem $knowledgeDir -File -Recurse -Force
@@ -269,16 +293,16 @@ try {
 
         $actualPaths = @(
             Get-ChildItem $knowledgeDir -File -Recurse -Force |
-                ForEach-Object {
-                    Get-RelativeFilePath -Root $knowledgeDir -File $_.FullName
-                } |
-                Sort-Object
+            ForEach-Object {
+                Get-RelativeFilePath -Root $knowledgeDir -File $_.FullName
+            } |
+            Sort-Object
         )
 
         $manifestPaths = @(
             $savedIntegrity.files |
-                ForEach-Object { $_.path } |
-                Sort-Object
+            ForEach-Object { $_.path } |
+            Sort-Object
         )
 
         if (Compare-Object $actualPaths $manifestPaths) {
