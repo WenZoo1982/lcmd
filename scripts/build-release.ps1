@@ -1,9 +1,8 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
     [string]$MainVersion,
-
-    [Parameter(Mandatory = $true)]
-    [string]$Prerelease,
+    [Parameter(Mandatory = $false)]
+    [string]$Prerelease = "",
 
     [Parameter(Mandatory = $true)]
     [string]$KnowledgeArchive,
@@ -60,7 +59,7 @@ try {
         throw "主程序版本格式无效：$MainVersion"
     }
 
-    if ($Prerelease -notmatch '^[a-zA-Z0-9.-]+$') {
+    if (-not [string]::IsNullOrEmpty($Prerelease) -and $Prerelease -notmatch '^[a-zA-Z0-9.-]+$') {
         throw "Pre-release 标识格式无效：$Prerelease"
     }
 
@@ -88,7 +87,12 @@ try {
     }
 
     Write-Host "主程序版本：$MainVersion"
-    Write-Host "Pre-release：$Prerelease"
+    if ([string]::IsNullOrEmpty($Prerelease)) {
+        Write-Host "发行类型：稳定版"
+    }
+    else {
+        Write-Host "Pre-release：$Prerelease"
+    }
     Write-Host "安装脚本：$installScript"
 
     Write-Host "`n========== 知识库 ZIP 校验 ==========" -ForegroundColor Cyan
