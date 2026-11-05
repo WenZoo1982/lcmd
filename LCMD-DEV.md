@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `8ecbaaf`；当前代码包含 PyInstaller onedir 打包配置、发行构建脚本（自动将 `scripts/install.ps1` 复制到发行包根目录）、内部安装验证入口及已实现首次安装流程的 PowerShell 安装脚本。
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1、2、3 均已完成。阶段二 Windows PowerShell 安装与内部测试发行环境：任务 1 设计完成；任务 2 安装环境与路径识别已实现并验收（提交 `884d1ee`）；任务 3 发行包完整性验证与部署准备已完成（提交 `813558b`）；任务 4 首次安装已实现并完成 beta.6-build 真实安装及安装后 CLI 验收（提交 `8ecbaaf`）。任务 5 已有版本升级、任务 6 中断恢复/失败回滚与 Windows 内部测试发行验收仍待实施。阶段三为在线更新，阶段四为完整 CLI 帮助。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `f57c3be`；当前代码包含 PyInstaller onedir 打包配置、发行构建脚本（自动将 `scripts/install.ps1` 复制到发行包根目录）、内部安装验证入口，以及已完成首次安装、重复安装和统一覆盖安装的 PowerShell 安装脚本。
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1、2、3 均已完成。阶段二 Windows PowerShell 安装与内部测试发行环境：任务 1 设计完成；任务 2 安装环境与路径识别已实现并验收（提交 `884d1ee`）；任务 3 发行包完整性验证与部署准备已完成（提交 `813558b`）；任务 4 首次安装已实现并完成真实安装及安装后 CLI 验收（提交 `8ecbaaf`）；任务 5 首次安装、重复安装及已有版本统一覆盖安装已实现并完成 beta.7-build 真实验收（提交 `f57c3be`）。安装器不保留旧配置，按当前安装包重建主程序、官方标准知识库和默认配置；不主动删除标准目录外的旧自定义知识库目录。复杂自动回滚/事务恢复不属于当前安装器设计目标，安装失败后允许用户重新运行同一安装包。阶段二后续任务以本文档状态为准。阶段三为在线更新，阶段四为完整 CLI 帮助。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的 Pre-release `v0.1.0`；当前内容为 13 篇 integration fixtures，不是完整正式命令目录。阶段二任务 3 已将该测试知识库作为内部打包样本随包部署并完成校验，不代表正式知识库内容验收完成）
 
@@ -1380,6 +1380,45 @@ PyInstaller 发行 EXE 人工验收：
 
 **验收边界：** 本轮完成首次安装及安装后 CLI 实际验收，不代表已有版本升级、中断恢复、失败回滚或在线更新已实现。当前 beta.6-build 使用的知识库仍是 Pre-release integration fixtures，不是正式完整命令知识库。用户的旧自定义知识库路径恢复/迁移不由安装器执行；安装器部署到标准知识库目录，用户可在安装后通过现有迁移命令自行迁移。
 
+
+### 6.12 Windows 11 beta.7-build 统一安装、覆盖安装与重复安装真实验收（提交 `f57c3be`）
+
+用户在 Windows 11 build 26300、PowerShell 5.1 环境中完成阶段二任务 5。提交 `f57c3be`（`feat: support unified Windows reinstall and upgrade`），已推送到 `origin/main`。
+
+本轮统一首次安装、已有版本覆盖安装和同版本重复安装的行为：每次均以当前安装包为准，重新部署主程序和随包官方标准知识库，并删除旧配置后重新初始化默认配置。安装器不继承旧配置中的 platform、language 或自定义知识库路径；标准配置固定指向 `%LOCALAPPDATA%\\lcmd\\knowledge`。标准目录之外的旧自定义知识库目录不由安装器主动删除。
+
+发行包及构建验证：
+
+- 主程序版本：`0.1.0`；Pre-release 标识：`beta.7-build`。
+- 知识库版本：`0.1.0`；随包知识库为 15 个文件的 integration fixtures，仍不是完整正式命令目录。
+- 知识库 ZIP SHA-256：`594df745e3087068ca910398578e281ef9002f2ccf3806f45033f55a6abb6930`。
+- 源码安装脚本与发行包内 `install.ps1` 的 SHA-256 一致：`E3328FECE281B8549E64EF7FFA5D4CF3AEF939335E10B467A55143B0A317ADFD`。
+- 发行包主程序 `app/lcmd.exe --version` 显示主程序和知识库版本均为 `0.1.0`，退出码 0；知识库 Manifest 版本正确，完整性清单记录 15 个文件。
+
+真实覆盖安装验收：
+
+- 在已有 beta.6 安装环境中运行 beta.7 安装包，安装器识别 `VALID_LCMD_INSTALL`，不再拒绝已有安装，允许完整覆盖。
+- 八个安装阶段全部完成，主程序、官方标准知识库、配置初始化、安装验证、当前用户 PATH 和安装身份标记均通过；`INSTALL_RESULT=SUCCESS`，退出码 0。
+- 安装后配置为 `platform = "windows"`、`language = "zh-CN"`，知识库路径为 `%LOCALAPPDATA%\\lcmd\\knowledge`。
+- 安装后 `lcmd.exe --version`、`--help` 和 `dir` 实际知识文档查询均成功，退出码 0；标准知识库文件数为 15；安装标记内容及当前用户 PATH 均正确。
+
+同版本重复安装与完整替换验收：
+
+- 人为将旧配置改为 `platform = "linux"`、`language = "en-US"`，并将知识库路径改为 `C:\\LCMD-REPEAT-TEST-KB`。
+- 在标准知识库目录中人为创建 `REPEAT-INSTALL-OLD-FILE.txt`，用于确认安装器不是仅覆盖同名文件。
+- 再次运行相同 beta.7 安装包，安装器仍识别已有有效安装并成功完成全部八个阶段，退出码 0。
+- 安装后配置被重新生成为当前默认值：`platform = "windows"`、`language = "zh-CN"`，知识库路径恢复为标准目录；人为创建的旧知识库标记文件已不存在。
+- 重复安装后 `lcmd.exe --version` 正常，主程序和知识库版本均为 `0.1.0`，退出码 0。
+
+提交前检查（用户本地实际执行）：
+
+- PowerShell AST Parser：`scripts/install.ps1` 语法检查通过。
+- 全量 pytest：`281 passed, 4 skipped`；4 项因当前 Windows 环境不支持创建符号链接而跳过。
+- Ruff lint：通过；Ruff format：33 files already formatted。
+- `git diff --check` 与暂存区差异检查通过。
+- 本次 Git 提交仅包含 `scripts/install.ps1`（146 insertions、77 deletions）；`.pytest-temp/` 保持未跟踪，未提交。
+
+**验收边界与设计决定：** 已通过首次安装、已有版本覆盖安装和同版本重复安装的真实验收。没有实现复杂自动回滚、跨重启事务恢复或备份恢复机制；安装中断后由用户重新运行同一安装包，安装器应按当前包重新部署。此次没有进行断电/强制终止故障注入测试，因此不宣称已验证所有中断时序。安装器不主动删除标准知识库目录之外的旧自定义知识库目录。
 ## 16. 新功能开发前的代码定位规则
 
 收到新功能需求后，先在总控文档中定位业务流程，再按以下顺序核对代码：
