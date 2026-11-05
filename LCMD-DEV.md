@@ -1260,43 +1260,43 @@ git diff --check
 **边界：** 本轮只完成发行暂存目录的构建和离线文件完整性清单生成/校验。尚未实现安装后运行时完整性验证、主程序/知识库在线更新或更新回滚；本次测试知识库不得视为正式内容验收。
 
 
-### 6.8 Windows 11 内部只读安装配置验证入口（提交 \x605a1c14a\x60）
+### 6.8 Windows 11 内部只读安装配置验证入口（提交 `5a1c14a`）
 
-用户在 Windows 11、Python 3.14.10 环境中新增内部安装验证入口和对应 CLI 测试。提交：\x605a1c14a\x60（\x60feat: add read-only installer config validation\x60），已推送到 \x60origin/main\x60。
+用户在 Windows 11、Python 3.14.10 环境中新增内部安装验证入口和对应 CLI 测试。提交：`5a1c14a`（`feat: add read-only installer config validation`），已推送到 `origin/main`。
 
 入口形式：
 
-\x60\x60\x60powershell
+```powershell
 .\x5clcmd.exe --internal-validate-config "C:\x5cUsers\x5c用户名\x5cAppData\x5cLocal\x5clcmd\x5cconfig.toml"
-\x60\x60\x60
+```
 
-实现位于 \x60src/lcmd/main.py\x60，在普通 CLI \x60create_app()\x60 调用之前分流。只读取指定 TOML 配置，调用 \x60load_config()\x60，再调用 \x60validate_knowledge_path()\x60 验证配置指向的知识库；不调用 \x60initialize_state()\x60、\x60recover_migration()\x60， 不创建、修改或删除配置及知识库文件。
+实现位于 `src/lcmd/main.py`，在普通 CLI `create_app()` 调用之前分流。只读取指定 TOML 配置，调用 `load_config()`，再调用 `validate_knowledge_path()` 验证配置指向的知识库；不调用 `initialize_state()`、`recover_migration()`，不创建、修改或删除配置及知识库文件。
 
 返回协议：
 
 | 情况 | 输出标识 | 退出码 |
 |---|---|---:|
-| 配置和知识库有效 | \x60LCMD_INSTALL_VALIDATION=OK\x60 | 0 |
-| 配置缺失/格式错误或知识库无效 | \x60LCMD_INSTALL_VALIDATION=ERROR\x60，附具体原因 | 1 |
+| 配置和知识库有效 | `LCMD_INSTALL_VALIDATION=OK` | 0 |
+| 配置缺失/格式错误或知识库无效 | `LCMD_INSTALL_VALIDATION=ERROR`，附具体原因 | 1 |
 | 参数缺失、空参数或多余参数 | 用法说明 | 2 |
 
 自动化检查结果（用户本地实际执行）：
 
-- \x60tests/test_cli.py\x60：64 passed。
+- `tests/test_cli.py`：64 passed。
 - 全量 pytest：273 passed。
 - Ruff lint：通过。
-- Ruff format 对 \x60src/lcmd/main.py\x60、\x60tests/test_cli.py\x60 检查通过。
+- Ruff format 对 `src/lcmd/main.py`、`tests/test_cli.py` 检查通过。
 
 PyInstaller 发行 EXE 人工验收：
 
-- 使用 \x60scripts/build-release.ps1\x60 构建 \x60lcmd-0.1.0-beta.2-build\x60，构建成功，退出码 0；发行目录包含 \x60app/lcmd.exe\x60 和 onedir 的 \x60_internal\x60 运行时目录。
-- 有效配置及知识库验证输出 \x60LCMD_INSTALL_VALIDATION=OK\x60，退出码 0。
-- \x60--version\x60 和 \x60--help\x60 均正常。
+- 使用 `scripts/build-release.ps1` 构建 `lcmd-0.1.0-beta.2-build`，构建成功，退出码 0；发行目录包含 `app/lcmd.exe` 和 onedir 的 `_internal` 运行时目录。
+- 有效配置及知识库验证输出 `LCMD_INSTALL_VALIDATION=OK`，退出码 0。
+- `--version` 和 `--help` 均正常。
 - 错误输入 6 项全部通过：配置文件不存在、TOML 格式错误、知识库目录不存在返回 1；缺少参数、空参数、多余参数返回 2。
 - 只读性复核：配置文件 SHA-256、大小、修改时间未变化；知识库 162 个文件的路径、大小、修改时间和 SHA-256 均未变化，差异数量为 0。
-- PowerShell 5.1 将 EXE 的 stderr 捕获为 \x60NativeCommandError\x60 显示记录；本次测试仍以原生进程实际退出码和输出标识断言，6 项结果均为 PASS。这是 PowerShell 错误流呈现方式，不是验证入口验收失败。
+- PowerShell 5.1 将 EXE 的 stderr 捕获为 `NativeCommandError` 显示记录；本次测试仍以原生进程实际退出码和输出标识断言，6 项结果均为 PASS。这是 PowerShell 错误流呈现方式，不是验证入口验收失败。
 
-**验收边界：** 该入口只负责只读验证指定配置及其知识库，不负责确定安装路径、不检查 \x60.lcmd-install.json\x60、不识别或部署安装目录，也不执行首次安装/升级。它是阶段二任务 2 的一个已完成子项，不能据此将整个任务 2 标记为完成。
+**验收边界：** 该入口只负责只读验证指定配置及其知识库，不负责确定安装路径、不检查 `.lcmd-install.json`、不识别或部署安装目录，也不执行首次安装/升级。它是阶段二任务 2 的一个已完成子项，不能据此将整个任务 2 标记为完成。
 
 
 
