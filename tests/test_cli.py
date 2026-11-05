@@ -1,4 +1,5 @@
 import warnings
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -6,6 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 import lcmd.cli.app as cli_app
+import lcmd.main as main_module
 from lcmd.cli.app import create_app
 from lcmd.core.config import AppConfig, ConfigError
 from lcmd.core.migration import (
@@ -964,3 +966,153 @@ def test_path_migration_progress_callback_is_executed(cli_mocks):
 
     assert result.exit_code == 0
     assert "迁移成功" in result.output
+
+
+def test_internal_validate_config_succeeds(monkeypatch, tmp_path, capsys):
+    config_file = tmp_path / "config.toml"
+    config_file.touch()
+
+    config = AppConfig(
+        knowledge_path=tmp_path / "knowledge",
+        platform="windows",
+        language="zh-CN",
+    )
+
+    load_config = Mock(return_value=config)
+    validate_knowledge_path = Mock()
+    create_app = Mock()
+
+    monkeypatch.setattr(main_module, "load_config", load_config)
+    monkeypatch.setattr(
+        main_module,
+        "validate_knowledge_path",
+        validate_knowledge_path,
+    )
+    monkeypatch.setattr(main_module, "create_app", create_app)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["lcmd", "--internal-validate-config", str(config_file)],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_module.main()
+
+    assert exc_info.value.code == 0
+    assert "LCMD_INSTALL_VALIDATION=OK" in capsys.readouterr().out
+    load_config.assert_called_once_with(config_file)
+    validate_knowledge_path.assert_called_once_with(config.knowledge_path)
+    create_app.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("exception", "message"),
+    [
+        (ConfigError("配置格式错误"), "配置格式错误"),
+        (PathSecurityError("知识库路径无效"), "知识库路径无效"),
+        (OSError("配置文件无法读取"), "配置文件无法读取"),
+    ],
+)
+def test_internal_validate_config_reports_validation_failure(
+    monkeypatch,
+    capsys,
+    exception,
+    message,
+):
+    monkeypatch.setattr(
+        main_module,
+        "load_config",
+        Mock(side_effect=exception),
+    )
+    create_app = Mock()
+    monkeypatch.setattr(main_module, "create_app", create_app)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["lcmd", "--internal-validate-config", "config.toml"],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_module.main()
+
+    assert exc_info.value.code == 1
+    error_output = capsys.readouterr().err
+    assert "LCMD_INSTALL_VALIDATION=ERROR" in error_output
+    assert message in error_output
+    assert create_app.assert_not_called() is None
+
+
+def test_internal_validate_config_reports_knowledge_validation_failure(
+    monkeypatch,
+    capsys,
+    tmp_path,
+):
+    config = AppConfig(
+        knowledge_path=tmp_path / "invalid-knowledge",
+        platform="windows",
+        language="zh-CN",
+    )
+
+    load_config = Mock(return_value=config)
+    validate_knowledge_path = Mock(side_effect=PathSecurityError("知识库目录结构无效"))
+    create_app = Mock()
+
+    monkeypatch.setattr(main_module, "load_config", load_config)
+    monkeypatch.setattr(
+        main_module,
+        "validate_knowledge_path",
+        validate_knowledge_path,
+    )
+    monkeypatch.setattr(main_module, "create_app", create_app)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["lcmd", "--internal-validate-config", "config.toml"],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_module.main()
+
+    error_output = capsys.readouterr().err
+
+    assert exc_info.value.code == 1
+    assert "LCMD_INSTALL_VALIDATION=ERROR" in error_output
+    assert "知识库目录结构无效" in error_output
+    load_config.assert_called_once_with(Path("config.toml"))
+    validate_knowledge_path.assert_called_once_with(config.knowledge_path)
+    create_app.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--internal-validate-config"],
+        ["--internal-validate-config", ""],
+        ["--internal-validate-config", "config.toml", "extra"],
+    ],
+)
+def test_internal_validate_config_rejects_invalid_arguments(
+    monkeypatch,
+    capsys,
+    arguments,
+):
+    create_app = Mock()
+    monkeypatch.setattr(main_module, "create_app", create_app)
+    monkeypatch.setattr("sys.argv", ["lcmd", *arguments])
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_module.main()
+
+    assert exc_info.value.code == 2
+    assert "用法：" in capsys.readouterr().err
+    create_app.assert_not_called()
+
+
+def test_normal_main_still_starts_cli(monkeypatch):
+    app = Mock()
+    create_app = Mock(return_value=app)
+
+    monkeypatch.setattr(main_module, "create_app", create_app)
+    monkeypatch.setattr("sys.argv", ["lcmd", "ls"])
+
+    main_module.main()
+
+    create_app.assert_called_once_with()
+    app.assert_called_once_with()
