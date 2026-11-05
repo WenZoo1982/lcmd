@@ -8,7 +8,7 @@
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
 - 当前代码基线：主程序 `main` 分支，最新代码提交 `64a7cf4`（`Support stable release builds`）；在 beta.9-build-fix8 已验收安装器和发行构建基础上，`scripts/build-release.ps1` 已支持稳定版构建：`Prerelease` 参数可省略并默认为空字符串，非空时仍执行原格式校验；稳定版构建日志显示“发行类型：稳定版”，完整性清单保留 `main_prerelease` 字段并写入空字符串。
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1、2、3 均已完成。阶段二 Windows PowerShell 安装与内部测试发行环境任务 1–6 均已完成：任务 1 设计完成；任务 2 安装环境与路径识别已实现并验收（提交 `884d1ee`）；任务 3 发行包完整性验证与部署准备已完成（提交 `813558b`）；任务 4 首次安装已实现并完成真实安装及安装后 CLI 验收（提交 `8ecbaaf`）；任务 5 首次安装、重复安装及已有版本统一覆盖安装已实现并完成 beta.7-build 真实验收（提交 `f57c3be`）；任务 6 安装器最终交互与 Windows 内部测试发行验证已完成 beta.9-build-fix8 真实安装验收。安装器固定两行动态进度、开始/成功/失败区域居中显示及最终文案已完成真实运行验收；安装后重新打开 PowerShell，`lcmd --help` 正常，确认当前用户 PATH 配置有效。此前在旧 PowerShell 窗口中测试时未刷新环境变量，导致一次 `lcmd` 未识别；重新打开终端后正常，属于测试窗口未刷新，不是安装器缺陷。安装器每次均按当前安装包重建主程序、官方标准知识库和默认配置；不主动删除标准目录外的旧自定义知识库目录。复杂自动回滚/跨重启事务恢复不属于当前安装器设计目标，安装失败后允许用户重新运行安装包。阶段二当前任务状态以 8.5.6 节为准。下一阶段为在线更新，之后为完整 CLI 帮助。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1–3、阶段二 Windows 安装与内部测试发行环境任务 1–6 均已完成。主程序稳定 Release `v0.1.0` 与知识库稳定 Release `v0.1.0` 均已正式发布并通过 GitHub API 核验（均 `draft=false`、`prerelease=false`，资产状态 `uploaded`）。下一阶段为阶段三在线更新机制；开始实现前必须先核对当前源码中的 CLI 更新入口、发行清单、配置路径和迁移事务实现，再制定分项任务。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；已作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
 
@@ -2918,7 +2918,38 @@ beta.9-build-fix8 真实发行构建与安装验收（用户在 Windows 11 build
 - `lcmd --help` 正常显示 CLI 选项及 `search` 命令。
 - 当前用户 PATH 可正常调用 `lcmd`。
 
-**验收结论与边界：** 主程序 v0.1.0 稳定版候选发行目录已完成构建、清单/文件完整性检查、主程序运行检查及真实安装验收，可作为 GitHub 稳定 Release 的候选资产。此时尚未确认主程序 GitHub Release 已创建或资产已上传；不能将候选构建等同于已发布。随包知识库仍为 15 个 integration fixtures，不是完整正式命令目录。当前 `--update` 仍未实现。
+**验收结论与边界：** 主程序 v0.1.0 稳定版发行包已完成构建、清单/文件完整性检查、主程序运行检查及真实安装验收，并已正式发布为 GitHub 稳定 Release（详见 6.15）。随包知识库仍为 15 个 integration fixtures，不是完整正式命令目录。当前 `--update` 仍未实现。
+## 6.15 主程序与知识库 v0.1.0 稳定 Release 正式发布核验
+
+两个仓库的首个稳定 Release 均已由用户通过 GitHub UI 发布，助手随后通过 GitHub REST API 读取 Release 元数据核验：
+
+主程序仓库 `WenZoo1982/lcmd`：
+- Release：`v0.1.0`，标题 `LCMD v0.1.0`，Target：`main`。
+- Release URL：<https://github.com/WenZoo1982/lcmd/releases/tag/v0.1.0>
+- Release ID：`435326620`；`draft=false`、`prerelease=false`。
+- 已上传资产：`lcmd-0.1.0.zip`，状态 `uploaded`，大小 `12,448,325` bytes。
+- GitHub 提供的资产 SHA-256：`89d651c73672306167ff7116aa1a10fbaec40accfbaddcb2b95d632265503976`。
+- 下载地址：<https://github.com/WenZoo1982/lcmd/releases/download/v0.1.0/lcmd-0.1.0.zip>。
+- **发布说明存在文件名不一致：** 正文写的是 `lcmd-0.1.0-windows-x64.zip`，实际资产名为 `lcmd-0.1.0.zip`。这是说明文案问题，不影响 Release 已发布及资产已上传；后续应在 GitHub Release 编辑页将正文文件名改为实际资产名，不需要重新上传。
+
+知识库仓库 `WenZoo1982/lcmd-kb`：
+- Release：`v0.1.0`；Release URL：<https://github.com/WenZoo1982/lcmd-kb/releases/tag/v0.1.0>。
+- `draft=false`、`prerelease=false`。
+- 已上传资产：`lcmd-kb-0.1.0.zip`，状态 `uploaded`，大小 `11,945` bytes。
+- SHA-256：`594df745e3087068ca910398578e281ef9002f2ccf3806f45033f55a6abb6930)。
+- 下载地址：<https://github.com/WenZoo1982/lcmd-kb/releases/download/v0.1.0/lcmd-kb-0.1.0.zip>。
+
+**阶段结论：** 主程序和知识库均已有可获取的稳定 Release，阶段三在线更新机制的发布前置条件满足。两个 Release 的稳定状态不代表知识库内容已完成正式覆盖率验收；当前知识库仍为 13 篇 integration fixtures（15 个文件，含元数据）。
+
+**阶段三开始规则：** 暂不直接编写更新代码。先读取并核对当前版本的以下源码：
+1. `src/lcmd/cli/app.py)：`--update/-u` 入口及 CLI 初始化/分发行为。
+2. 当前更新提示或更新模块：确认现有占位逻辑及其调用链。
+3. `scripts/build-release.ps1` 与发行包 `knowledge-integrity.json`：确认主程序版本、预发布标识、知识库版本及文件清单字段。
+4. `src/lcmd/core/migration.py`：确认迁移事务、校验、日志、恢复及清理实现。
+5. `src/lcmd/core/config.py`、`paths.py` 及 `path_security.py`：确认配置字段、当前知识库路径读取和安全边界。
+
+核对后按已确认的主程序优先更新规则制定任务和测试方案。不得将路径迁移函数未经评估直接用于同路径知识库版本替换；应优先抽取可复用事务逻辑。主程序更新、知识库单独更新及失败处理必须分别设计和验收。
+
 ## 16. 新功能开发前的代码定位规则
 
 收到新功能需求后，先在总控文档中定位业务流程，再按以下顺序核对代码：
