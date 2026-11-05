@@ -197,7 +197,6 @@ summary = "列出目录中的文件和子目录，并控制显示格式或隐藏
 
 ## 用途
 查看当前目录或指定目录中的内容。
-
 ## 基本语法
 
 ```bash
@@ -297,7 +296,6 @@ src/lcmd/
 ├── __main__.py
 └── main.py
 ```
-
 模块职责：
 
 | 模块 | 当前职责 |
@@ -497,7 +495,6 @@ language = "zh-CN"
 ### 6.3 Windows 11 CLI 知识库迁移集成与进度显示自动化检查（提交 `6ad27f3`）
 
 用户在 Windows 11、Python 3.14.10 环境中，对 `D:\Project_DEV\lcmd` 执行：
-
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/test_cli.py -q
 .\.venv\Scripts\python.exe -m pytest -q
@@ -572,7 +569,8 @@ LCMD 的核心用途是查询知识库中的命令文档。除固定的程序级
 
 | 长参数 | 短参数 | 用途 |
 |---|---|---|
-| `--help` | `-h` | 帮助 || `--version` | `-v` | 显示版本 |
+| `--help` | `-h` | 帮助 |
+| `--version` | `-v` | 显示版本 |
 | `--config` | `-c` | 查看或修改配置 |
 | `--path` | 不提供短参数 | 设置知识库路径 |
 | `--platform` | `-p` | 查看或设置平台（小写 p） |
@@ -1297,7 +1295,6 @@ PyInstaller 发行 EXE 人工验收：
 用户在 Windows 11、PowerShell 5.1 环境中实现 `scripts/install.ps1`，并在 `lcmd-0.1.0-beta.3-build` 发行暂存目录中执行验收。该脚本当前仅进行只读环境识别，不执行首次安装、升级、文件部署、配置初始化或回滚。
 
 验收覆盖：
-
 - 发行包结构和随包知识库验证；
 - 固定主程序安装目录状态分类及 `.lcmd-install.json` 严格校验；
 - onedir 关键文件缺失/空目录检测；
@@ -1367,3 +1364,4 @@ PyInstaller 发行 EXE 人工验收：
 | 修改启动/初始化/切换流程 | `cli/app.py` | ConfigError、KnowledgeLoadError、持久化时序、CLI 测试 |
 
 本表是定位入口，不意味着每项需求只修改表中一个文件。任何跨层需求都应沿调用链检查完整影响范围。
+
