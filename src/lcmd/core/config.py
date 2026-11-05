@@ -124,3 +124,35 @@ def save_config(config: AppConfig, path: Path) -> None:
                 temporary_path.unlink(missing_ok=True)
             except OSError:
                 pass
+
+
+def initialize_config(
+    knowledge_path: str | Path,
+    config_file: Path | None = None,
+) -> AppConfig:
+    """Initialize or update LCMD configuration for a knowledge directory.
+
+    Only the knowledge path is changed. Existing platform and language
+    preferences are preserved. Knowledge files are not copied or modified.
+    """
+    from lcmd.core.path_security import validate_knowledge_path
+
+    validated_path = validate_knowledge_path(knowledge_path)
+
+    if config_file is None:
+        from lcmd.core.paths import get_config_file
+
+        config_file = get_config_file()
+
+    if config_file.is_file():
+        config = load_config(config_file)
+        new_config = AppConfig(
+            knowledge_path=validated_path,
+            platform=config.platform,
+            language=config.language,
+        )
+    else:
+        new_config = AppConfig(knowledge_path=validated_path)
+
+    save_config(new_config, config_file)
+    return new_config

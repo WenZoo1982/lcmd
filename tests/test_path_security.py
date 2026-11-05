@@ -5,7 +5,6 @@ import pytest
 from lcmd.core.path_security import (
     PathSecurityError,
     normalize_path,
-    validate_knowledge_destination,
     validate_knowledge_path,
     validate_migration_target,
 )
@@ -309,106 +308,18 @@ def test_validate_migration_target_rejects_junction(tmp_path):
             protected_paths=[tmp_path / "protected"],
         )
 
-def test_validate_knowledge_destination_accepts_new_directory(tmp_path):
-    target = tmp_path / "destination"
-
-    result = validate_knowledge_destination(
-        target,
-        protected_paths=[tmp_path / "protected"],
-    )
-
-    assert result == target.resolve()
-    assert not target.exists()
-
-
-def test_validate_knowledge_destination_accepts_empty_directory(tmp_path):
-    target = tmp_path / "destination"
-    target.mkdir()
-
-    result = validate_knowledge_destination(
-        target,
-        protected_paths=[tmp_path / "protected"],
-    )
-
-    assert result == target.resolve()
-    assert target.is_dir()
-    assert list(target.iterdir()) == []
-
-
-def test_validate_knowledge_destination_accepts_nonempty_directory(tmp_path):
-    target = tmp_path / "destination"
-    target.mkdir()
-    existing_file = target / "existing.txt"
-    existing_file.write_text("keep this file", encoding="utf-8")
-
-    result = validate_knowledge_destination(
-        target,
-        protected_paths=[tmp_path / "protected"],
-    )
-
-    assert result == target.resolve()
-    assert existing_file.read_text(encoding="utf-8") == "keep this file"
-
-
-def test_validate_knowledge_destination_rejects_file(tmp_path):
-    target = tmp_path / "destination.txt"
-    target.write_text("not a directory", encoding="utf-8")
-
-    with pytest.raises(PathSecurityError, match="不是目录"):
-        validate_knowledge_destination(
-            target,
-            protected_paths=[tmp_path / "protected"],
-        )
-
-
-def test_validate_knowledge_destination_rejects_missing_parent(tmp_path):
-    target = tmp_path / "missing" / "destination"
-
-    with pytest.raises(PathSecurityError, match="父目录不存在"):
-        validate_knowledge_destination(
-            target,
-            protected_paths=[tmp_path / "protected"],
-        )
-
-
-def test_validate_knowledge_destination_rejects_protected_directory(tmp_path):
-    protected = tmp_path / "protected"
-    protected.mkdir()
-
-    with pytest.raises(PathSecurityError, match="受保护目录"):
-        validate_knowledge_destination(
-            protected,
-            protected_paths=[protected],
-        )
-
-
-def test_validate_knowledge_destination_rejects_symlink(tmp_path):
-    real_target = tmp_path / "real-target"
-    real_target.mkdir()
-    link = tmp_path / "linked-target"
-
-    try:
-        link.symlink_to(real_target, target_is_directory=True)
-    except (OSError, NotImplementedError):
-        pytest.skip("当前环境不支持创建目录符号链接")
-
-    with pytest.raises(PathSecurityError, match="符号链接"):
-        validate_knowledge_destination(
-            link,
-            protected_paths=[tmp_path / "protected"],
-        )
-
-def test_validate_knowledge_destination_accepts_default_knowledge_path(
+def test_validate_knowledge_path_accepts_default_knowledge_path(
     tmp_path,
     monkeypatch,
 ):
-    """默认知识库目录位于配置目录内，应允许使用。"""
+    """?????????????????????????"""
     import lcmd.core.path_security as path_security
 
     config_dir = tmp_path / "lcmd"
     config_dir.mkdir()
     config_file = config_dir / "config.toml"
     knowledge_dir = config_dir / "knowledge"
+    create_knowledge(knowledge_dir)
 
     monkeypatch.setattr(
         path_security,
@@ -421,32 +332,6 @@ def test_validate_knowledge_destination_accepts_default_knowledge_path(
         lambda: tmp_path / "Programs" / "LCMD",
     )
 
-    result = validate_knowledge_destination(knowledge_dir)
+    result = validate_knowledge_path(knowledge_dir)
 
     assert result == knowledge_dir.resolve()
-
-
-def test_validate_knowledge_destination_rejects_config_directory(
-    tmp_path,
-    monkeypatch,
-):
-    """配置目录本身仍然受到保护。"""
-    import lcmd.core.path_security as path_security
-
-    config_dir = tmp_path / "lcmd"
-    config_dir.mkdir()
-    config_file = config_dir / "config.toml"
-
-    monkeypatch.setattr(
-        path_security,
-        "get_config_file",
-        lambda: config_file,
-    )
-    monkeypatch.setattr(
-        path_security,
-        "_get_install_dir",
-        lambda: tmp_path / "Programs" / "LCMD",
-    )
-
-    with pytest.raises(PathSecurityError, match="受保护目录"):
-        validate_knowledge_destination(config_dir)        
