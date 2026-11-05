@@ -3,17 +3,17 @@
 
 <#
 .SYNOPSIS
-    LCMD Windows 首次安装程序。
+    LCMD Windows 统一安装程序。
 
 .DESCRIPTION
     - 固定安装主程序到 %LOCALAPPDATA%\Programs\LCMD
-    - 自动选择知识库路径，不提供自定义路径
-    - 验证发行包知识库文件清单及 SHA-256
-    - 保留已有有效知识库
-    - 初始化配置并保留已有有效配置中的 platform/language
-    - 写入安装身份标记及注册表辅助路径
+    - 固定安装官方知识库到 %LOCALAPPDATA%\lcmd\knowledge
+    - 每次安装均以当前发行包完整替换主程序和官方知识库
+    - 删除旧配置并按当前 Windows 环境重新初始化
+    - 写入安装身份标记
     - 配置当前用户 PATH
-    - 不执行升级、卸载、回滚或完整中断恢复
+    - 支持首次安装、重复安装和版本升级
+    - 不提供自动回滚或完整中断恢复
 #>
 
 Set-StrictMode -Version 2.0
@@ -723,7 +723,10 @@ function Copy-KnowledgeFiles {
 }
 
 function Write-InstallMarker {
-    param([string]$InstallDirectory)
+    param(
+        [string]$MarkerDirectory,
+        [string]$InstallDirectory
+    )
 
     $marker = [ordered]@{
         product = $script:ProductId
@@ -732,10 +735,10 @@ function Write-InstallMarker {
         install_dir = ConvertTo-NormalizedPath -Path $InstallDirectory
     }
 
-    $markerFile = Join-Path $InstallDirectory ".lcmd-install.json"
+    $markerFile = Join-Path $MarkerDirectory ".lcmd-install.json"
 
     if (Test-Path -LiteralPath $markerFile) {
-        throw "正式安装标记已经存在，拒绝覆盖。"
+        throw "临时安装目录已经存在安装标记。"
     }
 
     $temporaryFile = $markerFile + "." +
@@ -898,7 +901,7 @@ public static class LcmdEnvironmentNotification
 try {
     Write-Host ""
     Write-Host "LCMD Windows 安装程序" -ForegroundColor Cyan
-    Write-Host "首次安装模式"
+    Write-Host "统一安装与覆盖模式"
     Write-Host "主程序安装路径固定，不提供自定义路径。"
 
     # ------------------------------------------------------------
@@ -982,22 +985,19 @@ try {
         Write-Host "固定安装目录：$script:InstallDirectory"
         Write-Host "安装目录状态：$($installState.State)"
 
-        if ($installState.State -eq "VALID_LCMD_INSTALL") {
-            throw "检测到已有 LCMD 安装（版本 $($installState.MainVersion)）。当前安装程序只处理首次安装，不执行升级。"
-        }
-
         if ($installState.State -eq "UNKNOWN_INVALID") {
-            throw "固定安装目录包含未知内容，停止安装以保护现有文件：$($installState.Reason)"
+            throw "固定安装目录包含无法识别的内容，停止安装：$($installState.Reason)"
         }
 
-        # 安装器始终使用标准知识库目录，不恢复用户以前的自定义路径。
-        $defaultKnowledgePath = Join-Path $script:ConfigDirectory "knowledge"
+        if ($installState.State -eq "VALID_LCMD_INSTALL") {
+            Write-Host "检测到已有 LCMD：版本 $($installState.MainVersion)"
+            Write-Host "允许使用当前发行包完整覆盖。"
+        }
 
-        $selection = Select-FirstInstallKnowledgePath `
-            -DefaultKnowledgePath $defaultKnowledgePath
-
-        $script:KnowledgePath = $selection.Path
-        $script:KnowledgeSource = $selection.Source
+        # 每次安装固定使用官方标准知识库目录。
+        $script:KnowledgePath = ConvertTo-NormalizedPath -Path (
+            Join-Path $script:ConfigDirectory "knowledge"
+        )
 
         if (Test-Path -LiteralPath $script:ConfigFile) {
             if (-not (Test-Path -LiteralPath $script:ConfigFile -PathType Leaf)) {
@@ -1010,19 +1010,15 @@ try {
                 throw "配置文件不能是重解析点。"
             }
 
-            Write-Host "现有配置文件：存在"
-            Write-Host "安装后将更新知识库路径，保留原有 platform 和 language。"
-
-            # 不再读取配置中的旧知识库路径。
-            # 配置解析及有效性检查由内部配置初始化命令完成。
-            $script:DetectedLanguage = "zh-CN"
+            Write-Host "现有配置文件：存在，安装时将删除并重新生成。"
         }
         else {
-            Write-Host "现有配置文件：不存在"
-
-            $script:DetectedLanguage = Get-WindowsPreferredLanguage
-            Write-Host "Windows 首选 UI 语言：$script:DetectedLanguage"
+            Write-Host "现有配置文件：不存在。"
         }
+
+        # 不读取旧配置，每次均检测当前 Windows 首选 UI 语言。
+        $script:DetectedLanguage = Get-WindowsPreferredLanguage
+        Write-Host "Windows 首选 UI 语言：$script:DetectedLanguage"
 
 
     } | Out-Null
@@ -1067,12 +1063,36 @@ try {
             throw "主程序临时部署版本与发行清单不一致。"
         }
 
+        # 在临时目录中提前写入安装标记。
+        # 标记记录正式安装路径，随新版目录一起部署。
+        Write-InstallMarker `
+            -MarkerDirectory $script:AppStageDirectory `
+            -InstallDirectory $script:InstallDirectory
+
+        $currentInstallState = Get-InstallDirectoryState `
+            -InstallDirectory $script:InstallDirectory
+
+        if ($currentInstallState.State -eq "UNKNOWN_INVALID") {
+            throw "正式安装目录状态异常，停止替换：$($currentInstallState.Reason)"
+        }
+
+        $retiredInstallDirectory = $null
+
         if (Test-Path -LiteralPath $script:InstallDirectory) {
-            if (-not (Test-DirectoryEmpty -Path $script:InstallDirectory)) {
-                throw "固定安装目录不为空，拒绝覆盖。"
+            if ($currentInstallState.State -ne "VALID_LCMD_INSTALL" -and
+                $currentInstallState.State -ne "EMPTY_DIRECTORY") {
+                throw "正式安装目录状态不允许替换：$($currentInstallState.State)"
             }
 
-            Remove-Item -LiteralPath $script:InstallDirectory -Force
+            $retiredInstallDirectory = Join-Path $programsDirectory (
+                ".lcmd-app-retired-" + [Guid]::NewGuid().ToString("N")
+            )
+
+            # 先通过同级目录改名移出旧版本，避免逐文件删除造成半残状态。
+            [System.IO.Directory]::Move(
+                $script:InstallDirectory,
+                $retiredInstallDirectory
+            )
         }
 
         [System.IO.Directory]::Move(
@@ -1081,6 +1101,23 @@ try {
         )
 
         $script:AppStageDirectory = $null
+
+        if ($null -ne $retiredInstallDirectory -and
+            (Test-Path -LiteralPath $retiredInstallDirectory)) {
+            Remove-Item -LiteralPath $retiredInstallDirectory `
+                -Recurse -Force -ErrorAction Stop
+        }
+
+        # 清理之前中断时遗留的旧版本目录。
+        $staleInstallDirectories = @(
+            Get-ChildItem -LiteralPath $programsDirectory `
+                -Directory -Filter ".lcmd-app-retired-*" -ErrorAction Stop
+        )
+
+        foreach ($directory in $staleInstallDirectories) {
+            Remove-Item -LiteralPath $directory.FullName `
+                -Recurse -Force -ErrorAction Stop
+        }
 
         Write-Host "主程序已部署到固定目录。"
         Write-Host "主程序版本：$stagedVersion"
@@ -1091,58 +1128,75 @@ try {
     # ------------------------------------------------------------
 
     Invoke-InstallStage -Name "4/8 知识库部署" -MinimumMilliseconds 1000 -Action {
-        $targetState = Test-KnowledgeDirectory -Path $script:KnowledgePath
+        $knowledgeParent = Split-Path -Parent $script:KnowledgePath
 
-        if ($targetState.State -eq "VALID_KNOWLEDGE") {
-            Write-Host "目标位置已有有效知识库，不覆盖现有内容。"
+        $script:KnowledgeStageDirectory = New-SiblingStageDirectory `
+            -ParentDirectory $knowledgeParent `
+            -Prefix ".lcmd-knowledge-stage-"
+
+        Copy-KnowledgeFiles `
+            -Source $script:PackageKnowledge `
+            -Destination $script:KnowledgeStageDirectory
+
+        # 新知识库必须先完成全部文件完整性和结构验证。
+        $null = Test-ReleaseIntegrity `
+            -KnowledgeDirectory $script:KnowledgeStageDirectory `
+            -IntegrityFile $script:PackageIntegrity
+
+        $null = & $script:Exe `
+            "--internal-validate-knowledge" `
+            $script:KnowledgeStageDirectory
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "知识库临时部署后的结构验证失败。"
         }
-        elseif ($targetState.State -eq "NOT_EXISTS" -or
-            $targetState.State -eq "EMPTY_DIRECTORY") {
 
-            $knowledgeParent = Split-Path -Parent $script:KnowledgePath
+        $retiredKnowledgeDirectory = $null
 
-            $script:KnowledgeStageDirectory = New-SiblingStageDirectory `
-                -ParentDirectory $knowledgeParent `
-                -Prefix ".lcmd-knowledge-stage-"
-
-            Copy-KnowledgeFiles `
-                -Source $script:PackageKnowledge `
-                -Destination $script:KnowledgeStageDirectory
-
-            # 在临时目录中完成全部文件完整性和结构验证。
-            $null = Test-ReleaseIntegrity `
-                -KnowledgeDirectory $script:KnowledgeStageDirectory `
-                -IntegrityFile $script:PackageIntegrity
-
-            $null = & $script:Exe `
-                "--internal-validate-knowledge" `
-                $script:KnowledgeStageDirectory
-
-            if ($LASTEXITCODE -ne 0) {
-                throw "知识库临时部署后的结构验证失败。"
+        if (Test-Path -LiteralPath $script:KnowledgePath) {
+            if (-not (Test-Path -LiteralPath $script:KnowledgePath -PathType Container)) {
+                throw "标准知识库路径存在，但不是目录。"
             }
 
-            # 只有新知识库全部验证通过，才处理正式目标目录。
-            if (Test-Path -LiteralPath $script:KnowledgePath) {
-                if (-not (Test-DirectoryEmpty -Path $script:KnowledgePath)) {
-                    throw "知识库目标目录已不为空，拒绝覆盖。"
-                }
-
-                Remove-Item -LiteralPath $script:KnowledgePath -Force
+            if (Test-PathReparsePoints -Path $script:KnowledgePath) {
+                throw "标准知识库目录包含重解析点，停止替换。"
             }
 
-            [System.IO.Directory]::Move(
-                $script:KnowledgeStageDirectory,
-                $script:KnowledgePath
+            $retiredKnowledgeDirectory = Join-Path $knowledgeParent (
+                ".lcmd-knowledge-retired-" + [Guid]::NewGuid().ToString("N")
             )
 
-            $script:KnowledgeStageDirectory = $null
+            [System.IO.Directory]::Move(
+                $script:KnowledgePath,
+                $retiredKnowledgeDirectory
+            )
+        }
 
-            Write-Host "知识库部署及完整性复核通过。"
+        [System.IO.Directory]::Move(
+            $script:KnowledgeStageDirectory,
+            $script:KnowledgePath
+        )
+
+        $script:KnowledgeStageDirectory = $null
+
+        if ($null -ne $retiredKnowledgeDirectory -and
+            (Test-Path -LiteralPath $retiredKnowledgeDirectory)) {
+            Remove-Item -LiteralPath $retiredKnowledgeDirectory `
+                -Recurse -Force -ErrorAction Stop
         }
-        else {
-            throw "知识库目标目录状态异常：$($targetState.State)。不会覆盖现有内容。"
+
+        # 清理之前中断时遗留的旧标准知识库目录。
+        $staleKnowledgeDirectories = @(
+            Get-ChildItem -LiteralPath $knowledgeParent `
+                -Directory -Filter ".lcmd-knowledge-retired-*" -ErrorAction Stop
+        )
+
+        foreach ($directory in $staleKnowledgeDirectories) {
+            Remove-Item -LiteralPath $directory.FullName `
+                -Recurse -Force -ErrorAction Stop
         }
+
+        Write-Host "官方知识库已完整替换，文件完整性及结构验证通过。"
     } | Out-Null
 
     # ------------------------------------------------------------
@@ -1154,6 +1208,23 @@ try {
             New-Item -ItemType Directory `
                 -Path $script:ConfigDirectory -Force |
                 Out-Null
+        }
+
+        # 不继承任何旧配置。每次安装都重新生成默认配置。
+        if (Test-Path -LiteralPath $script:ConfigFile) {
+            $configItem = Get-Item -LiteralPath $script:ConfigFile -Force
+
+            if (-not $configItem.PSIsContainer -and
+                ($configItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "旧配置文件不能是重解析点。"
+            }
+
+            if ($configItem.PSIsContainer) {
+                throw "配置文件路径被目录占用，无法重新初始化。"
+            }
+
+            Remove-Item -LiteralPath $script:ConfigFile -Force -ErrorAction Stop
+            Write-Host "旧配置文件已删除。"
         }
 
         $language = $script:DetectedLanguage
@@ -1236,9 +1307,7 @@ try {
     # ------------------------------------------------------------
 
     Invoke-InstallStage -Name "8/8 完成收尾" -MinimumMilliseconds 800 -Action {
-        # PATH 成功后才写入正式安装身份标记。
-        Write-InstallMarker -InstallDirectory $script:InstallDirectory
-
+        # 安装标记已随新版主程序临时目录提前部署。
         $marker = Test-InstallMarker `
             -InstallDirectory $script:InstallDirectory
 
@@ -1255,7 +1324,7 @@ try {
 
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
-    Write-Host "LCMD 首次安装成功！" -ForegroundColor Green
+    Write-Host "LCMD 安装成功！" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "请重新打开 PowerShell 或终端，然后运行："
@@ -1288,8 +1357,8 @@ catch {
 
     Write-Host ""
     Write-Host "INSTALL_RESULT=ERROR"
-    Write-Host "注意：本版本不提供失败回滚或完整中断恢复。"
-    Write-Host "请保留现场，不要手动删除已有知识库或配置文件。"
+    Write-Host "本版本不提供自动回滚；如安装中断，可重新运行同一安装包。"
+    Write-Host "重新运行同一安装包，将再次部署主程序、官方知识库并重新生成配置。"
 }
 finally {
     # 只清理本次运行创建、尚未提升为正式目录的临时目录。
