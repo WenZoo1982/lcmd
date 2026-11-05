@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `959467f`（`feat: add GitHub release update checks`）。此前 `64a7cf4` 已使 `scripts/build-release.ps1` 支持稳定版构建：`Prerelease` 参数可省略并默认为空字符串，非空时仍执行原格式校验；稳定版构建日志显示“发行类型：稳定版”，完整性清单保留 `main_prerelease` 字段并写入空字符串。当前新增 `src/lcmd/core/update.py`，实现 GitHub 最新稳定 Release 元数据查询与本地版本比较；尚未接入 CLI，也未实现资产下载和实际更新。
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1–3、阶段二 Windows 安装与内部测试发行环境任务 1–6 均已完成。主程序稳定 Release `v0.1.0` 与知识库稳定 Release `v0.1.0` 均已正式发布并通过 GitHub API 核验（均 `draft=false`、`prerelease=false`，资产状态 `uploaded`）。阶段三在线更新机制正在实施：任务 1“GitHub 稳定 Release 查询与版本比较”已完成并推送，提交 `959467f`；任务 2“发行包下载与完整性验证”待实施。后续按主程序优先规则推进知识库独立更新、主程序及随包知识库更新、CLI 接入和故障恢复验收。启动时仍先调用 `recover_migration()`，再读取配置和加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `27afcba`（`feat: add release asset download and verification`）。此前 `64a7cf4` 已使 `scripts/build-release.ps1` 支持稳定版构建：`Prerelease` 参数可省略并默认为空字符串，非空时仍执行原格式校验；稳定版构建日志显示“发行类型：稳定版”，完整性清单保留 `main_prerelease` 字段并写入空字符串。当前 `src/lcmd/core/update.py` 已实现 GitHub 最新稳定 Release 元数据查询与本地版本比较；`src/lcmd/core/update_download.py` 已实现发行资产下载、大小/SHA-256/ZIP 完整性验证及下载文件原子落盘。上述模块尚未接入 CLI，也未执行知识库或主程序替换。
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1–3、阶段二 Windows 安装与内部测试发行环境任务 1–6 均已完成。主程序稳定 Release `v0.1.0` 与知识库稳定 Release `v0.1.0` 均已正式发布并通过 GitHub API 核验（均 `draft=false`、`prerelease=false`，资产状态 `uploaded`）。阶段三在线更新机制正在实施：任务 1“GitHub 稳定 Release 查询与版本比较”已完成并推送，提交 `959467f`；任务 2“发行包下载与完整性验证”已完成并推送，提交 `27afcba`。下一步为任务 3“知识库独立更新”，之后推进主程序及随包知识库更新、CLI 接入和故障恢复验收。启动时仍先调用 `recover_migration()`，再读取配置和加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；已作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
 
@@ -304,7 +304,8 @@ src/lcmd/
 | `cli/app.py` | Typer 应用、动态命令参数接管、初始化状态、配置查看与平台/语言切换、search 固定子命令及动态知识库查询 |
 | `core/config.py` | AppConfig、TOML 配置读取/校验/原子保存 |
 | `core/paths.py` | platformdirs 用户配置目录、配置文件和默认知识库目录 |
-| `core/update.py` | GitHub 最新稳定 Release 元数据查询、Release 资产元数据验证、本地与远程三段式版本比较；当前不下载资产、不修改本地文件，也未接入 CLI |
+| `core/update.py` | GitHub 最新稳定 Release 元数据查询、Release 资产元数据验证、本地与远程三段式版本比较；不执行下载、解压或更新替换，尚未接入 CLI |
+| `core/update_download.py` | 下载 GitHub Release 资产；校验资产元数据、最终重定向地址、HTTP 状态、文件大小、SHA-256 和 ZIP CRC；使用同目录临时文件及 `os.replace()` 原子落盘，失败时保留原目标文件；不解压或替换知识库/主程序，尚未接入 CLI |
 | `core/path_security.py` | 知识库路径规范化、安全边界检查、符号链接/Windows 重解析点检查及迁移目标校验 |
 | `core/migration.py` | 知识库迁移事务、SHA-256 完整性校验、迁移日志、旧目录尽力清理与中断恢复核心逻辑 |
 | `knowledge/models.py` | 平台、工具、目录、文档、查询及搜索数据模型 |
@@ -333,7 +334,7 @@ src/lcmd/
 | `lcmd -c --language en-US` / `lcmd -c -l en-US` | 验证并切换语言，成功后持久化 |
 | `lcmd -c -p linux -l zh-CN` | 验证最终平台/语言组合后一次性保存配置 |
 | `lcmd -c --path <目录>` | 调用 `migrate_knowledge()` 迁移知识库；目标已存在时询问是否覆盖，显示复制字节百分比进度、迁移成功/失败及旧目录清理警告 |
-| `lcmd --update` / `-u` | 当前仍显示“知识库更新功能尚未实现”；底层 `core/update.py` 已具备稳定 Release 检查能力，但尚未接入 CLI |
+| `lcmd --update` / `-u` | 当前仍显示“知识库更新功能尚未实现”；底层已具备稳定 Release 检查及发行资产下载/完整性验证能力，但尚未接入 CLI |
 
 | `lcmd <command>` | 查询当前平台/语言的知识文档 |
 | `lcmd <tool>` | 显示工具入口页和可用子命令；无入口页时按单篇/多篇规则处理 |
@@ -346,7 +347,7 @@ src/lcmd/
 当前仍未实现：
 
 
-- `--update` 的 CLI 集成、发行资产下载与完整性验证、知识库替换、主程序及随包知识库更新流程尚未实现；底层 Release 查询与版本比较模块已实现。
+- `--update` 的 CLI 集成、知识库替换、主程序及随包知识库更新流程尚未实现；底层 Release 查询/版本比较及发行资产下载/完整性验证模块已实现。
 - 最终完整帮助文档；当前帮助仍由 Typer 根据参数定义生成。
 - 系统命令执行、系统命令安装检测或在线搜索功能。
 
@@ -1461,8 +1462,8 @@ beta.9-build-fix8 真实发行构建与安装验收（用户在 Windows 11 build
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `959467f`（`feat: add GitHub release update checks`）。此前 `64a7cf4` 已使 `scripts/build-release.ps1` 支持稳定版构建：`Prerelease` 参数可省略并默认为空字符串，非空时仍执行原格式校验；稳定版构建日志显示“发行类型：稳定版”，完整性清单保留 `main_prerelease` 字段并写入空字符串。当前新增 `src/lcmd/core/update.py`，实现 GitHub 最新稳定 Release 元数据查询与本地版本比较；尚未接入 CLI，也未实现资产下载和实际更新。
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1、2、3 均已完成。阶段二 Windows PowerShell 安装与内部测试发行环境任务 1–6 均已完成：任务 1 设计完成；任务 2 安装环境与路径识别已实现并验收（提交 `884d1ee`）；任务 3 发行包完整性验证与部署准备已完成（提交 `813558b`）；任务 4 首次安装已实现并完成真实安装及安装后 CLI 验收（提交 `8ecbaaf`）；任务 5 首次安装、重复安装及已有版本统一覆盖安装已实现并完成 beta.7-build 真实验收（提交 `f57c3be`）；任务 6 安装器最终交互与 Windows 内部测试发行验证已完成 beta.9-build-fix8 真实安装验收。安装器固定两行动态进度、开始/成功/失败区域居中显示及最终文案已完成真实运行验收；安装后重新打开 PowerShell，`lcmd --help` 正常，确认当前用户 PATH 配置有效。此前在旧 PowerShell 窗口中测试时未刷新环境变量，导致一次 `lcmd` 未识别；重新打开终端后正常，属于测试窗口未刷新，不是安装器缺陷。安装器每次均按当前安装包重建主程序、官方标准知识库和默认配置；不主动删除标准目录外的旧自定义知识库目录。复杂自动回滚/跨重启事务恢复不属于当前安装器设计目标，安装失败后允许用户重新运行安装包。阶段二当前任务状态以 8.5.6 节为准。阶段三在线更新机制正在实施：任务 1“GitHub 稳定 Release 查询与版本比较”已完成（提交 `959467f`），下一步为发行包下载与完整性验证；之后为完整 CLI 帮助。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `27afcba`（`feat: add release asset download and verification`）。此前 `64a7cf4` 已使 `scripts/build-release.ps1` 支持稳定版构建：`Prerelease` 参数可省略并默认为空字符串，非空时仍执行原格式校验；稳定版构建日志显示“发行类型：稳定版”，完整性清单保留 `main_prerelease` 字段并写入空字符串。当前 `src/lcmd/core/update.py` 已实现 GitHub 最新稳定 Release 元数据查询与本地版本比较；`src/lcmd/core/update_download.py` 已实现发行资产下载、大小/SHA-256/ZIP 完整性验证及下载文件原子落盘。上述模块尚未接入 CLI，也未执行知识库或主程序替换。
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1、2、3 均已完成。阶段二 Windows PowerShell 安装与内部测试发行环境任务 1–6 均已完成：任务 1 设计完成；任务 2 安装环境与路径识别已实现并验收（提交 `884d1ee`）；任务 3 发行包完整性验证与部署准备已完成（提交 `813558b`）；任务 4 首次安装已实现并完成真实安装及安装后 CLI 验收（提交 `8ecbaaf`）；任务 5 首次安装、重复安装及已有版本统一覆盖安装已实现并完成 beta.7-build 真实验收（提交 `f57c3be`）；任务 6 安装器最终交互与 Windows 内部测试发行验证已完成 beta.9-build-fix8 真实安装验收。安装器固定两行动态进度、开始/成功/失败区域居中显示及最终文案已完成真实运行验收；安装后重新打开 PowerShell，`lcmd --help` 正常，确认当前用户 PATH 配置有效。此前在旧 PowerShell 窗口中测试时未刷新环境变量，导致一次 `lcmd` 未识别；重新打开终端后正常，属于测试窗口未刷新，不是安装器缺陷。安装器每次均按当前安装包重建主程序、官方标准知识库和默认配置；不主动删除标准目录外的旧自定义知识库目录。复杂自动回滚/跨重启事务恢复不属于当前安装器设计目标，安装失败后允许用户重新运行安装包。阶段二当前任务状态以 8.5.6 节为准。阶段三在线更新机制正在实施：任务 1“GitHub 稳定 Release 查询与版本比较”已完成（提交 `959467f`），任务 2“发行包下载与完整性验证”已完成并推送（提交 `27afcba`）；下一步为任务 3“知识库独立更新”。启动时会先调用 `recover_migration()`，再读取配置和加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；已作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
 
@@ -1758,7 +1759,8 @@ src/lcmd/
 | `cli/app.py` | Typer 应用、动态命令参数接管、初始化状态、配置查看与平台/语言切换、search 固定子命令及动态知识库查询 |
 | `core/config.py` | AppConfig、TOML 配置读取/校验/原子保存 |
 | `core/paths.py` | platformdirs 用户配置目录、配置文件和默认知识库目录 |
-| `core/update.py` | GitHub 最新稳定 Release 元数据查询、Release 资产元数据验证、本地与远程三段式版本比较；当前不下载资产、不修改本地文件，也未接入 CLI |
+| `core/update.py` | GitHub 最新稳定 Release 元数据查询、Release 资产元数据验证、本地与远程三段式版本比较；不执行下载、解压或更新替换，尚未接入 CLI |
+| `core/update_download.py` | 下载 GitHub Release 资产；校验资产元数据、最终重定向地址、HTTP 状态、文件大小、SHA-256 和 ZIP CRC；使用同目录临时文件及 `os.replace()` 原子落盘，失败时保留原目标文件；不解压或替换知识库/主程序，尚未接入 CLI |
 | `core/path_security.py` | 知识库路径规范化、安全边界检查、符号链接/Windows 重解析点检查及迁移目标校验 |
 | `core/migration.py` | 知识库迁移事务、SHA-256 完整性校验、迁移日志、旧目录尽力清理与中断恢复核心逻辑 |
 | `knowledge/models.py` | 平台、工具、目录、文档、查询及搜索数据模型 |
@@ -1787,7 +1789,7 @@ src/lcmd/
 | `lcmd -c --language en-US` / `lcmd -c -l en-US` | 验证并切换语言，成功后持久化 |
 | `lcmd -c -p linux -l zh-CN` | 验证最终平台/语言组合后一次性保存配置 |
 | `lcmd -c --path <目录>` | 调用 `migrate_knowledge()` 迁移知识库；目标已存在时询问是否覆盖，显示复制字节百分比进度、迁移成功/失败及旧目录清理警告 |
-| `lcmd --update` / `-u` | 当前仍显示“知识库更新功能尚未实现”；底层 `core/update.py` 已具备稳定 Release 检查能力，但尚未接入 CLI |
+| `lcmd --update` / `-u` | 当前仍显示“知识库更新功能尚未实现”；底层已具备稳定 Release 检查及发行资产下载/完整性验证能力，但尚未接入 CLI |
 
 | `lcmd <command>` | 查询当前平台/语言的知识文档 |
 | `lcmd <tool>` | 显示工具入口页和可用子命令；无入口页时按单篇/多篇规则处理 |
@@ -1800,7 +1802,7 @@ src/lcmd/
 当前仍未实现：
 
 
-- `--update` 的 CLI 集成、发行资产下载与完整性验证、知识库替换、主程序及随包知识库更新流程尚未实现；底层 Release 查询与版本比较模块已实现。
+- `--update` 的 CLI 集成、知识库替换、主程序及随包知识库更新流程尚未实现；底层 Release 查询/版本比较及发行资产下载/完整性验证模块已实现。
 - 最终完整帮助文档；当前帮助仍由 Typer 根据参数定义生成。
 - 系统命令执行、系统命令安装检测或在线搜索功能。
 
@@ -2979,6 +2981,32 @@ beta.9-build-fix8 真实发行构建与安装验收（用户在 Windows 11 build
 - 本次代码提交仅包含上述两个文件，共新增 755 行；提交已推送至 `origin/main`，用户终端确认远程分支从 `147cd5b` 前进至 `959467f`。
 
 **任务 1 结论：** Release 元数据查询与版本比较模块已实现、专项测试及全量测试通过并推送。发行资产下载、完整性验证、知识库替换、主程序更新和 CLI 集成均不属于本任务完成范围，后续任务不得将其描述为已实现。
+
+## 6.17 阶段三任务 2：发行包下载与完整性验证
+
+用户完成本地实现、专项测试、全项目回归、提交并推送；远程 `main` 已核验包含提交 `27afcba`（`feat: add release asset download and verification`）。
+
+实现文件：
+- `src/lcmd/core/update_download.py`：新增 Release 资产下载与完整性验证模块。
+- `tests/test_update_download.py`：新增下载模块专项单元测试。
+
+当前模块能力：
+- 校验 `ReleaseAsset` 类型、资产名称、正整数大小、`sha256:` digest 格式及 HTTPS GitHub 下载地址。
+- 下载响应最终 URL 仅允许 HTTPS GitHub 下载域名，包括 `github.com`、`release-assets.githubusercontent.com` 和 `objects.githubusercontent.com`。
+- 使用标准库 `urllib` 发起下载请求，按 1 MiB 分块流式写入目标目录中的临时文件；检查 HTTP 状态、下载字节数与 Release 元数据声明的大小一致。
+- 计算 SHA-256 并与 Release asset digest 做安全比较；将下载内容作为 ZIP 检查，拒绝空归档、损坏归档及 CRC 校验失败的归档。
+- 全部校验成功后使用 `os.replace()` 将临时文件原子替换到目标路径；失败时清理临时文件，并保留原有目标文件。
+- 目标父目录必须已存在；本模块只负责下载和验证，不解压、不替换知识库或主程序、不修改配置，也未接入 `lcmd --update/-u` CLI。
+
+测试与质量检查（用户本地实际执行）：
+- `tests/test_update_download.py` 专项测试：31 passed。
+- 全项目 pytest：352 passed、4 skipped、0 failed。4 项跳过均因当前 Windows 环境不支持创建文件/目录符号链接。
+- 全项目 Ruff：`All checks passed!`；执行时出现 `.pytest-temp/` 目录访问警告，但 Ruff 最终检查通过。
+- `git diff --check` 与 `git diff --cached --check` 均通过。
+- 任务 2 暂存区仅包含 `src/lcmd/core/update_download.py` 和 `tests/test_update_download.py` 两个新增文件，共 692 行；既有 `scripts/install.ps1` 修改、备份文件和 `.pytest-temp/` 均未纳入提交。
+- 提交 `27afcba` 已推送至 `origin/main`，用户终端确认远程分支从 `1470cf9` 前进至 `27afcba`。
+
+**任务 2 结论：** Release 资产下载、大小与 SHA-256 校验、ZIP 完整性检查及安全落盘模块已实现，专项测试和全项目回归测试通过并推送。当前尚未执行真实在线资产下载验收；下载模块也未解压资产、替换知识库/主程序或接入 CLI。下一步进入任务 3“知识库独立更新”，必须复用并评估现有迁移事务安全设计，不得直接把路径迁移函数用于同路径版本替换。
 
 ## 16. 新功能开发前的代码定位规则
 
