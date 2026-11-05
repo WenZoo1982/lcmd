@@ -1267,7 +1267,7 @@ git diff --check
 入口形式：
 
 ```powershell
-.\x5clcmd.exe --internal-validate-config "C:\x5cUsers\x5c用户名\x5cAppData\x5cLocal\x5clcmd\x5cconfig.toml"
+.\lcmd.exe --internal-validate-config "C:\Users\用户名\AppData\Local\lcmd\config.toml"
 ```
 
 实现位于 `src/lcmd/main.py`，在普通 CLI `create_app()` 调用之前分流。只读取指定 TOML 配置，调用 `load_config()`，再调用 `validate_knowledge_path()` 验证配置指向的知识库；不调用 `initialize_state()`、`recover_migration()`，不创建、修改或删除配置及知识库文件。
