@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `789a8f3`（`refactor: extract knowledge file safety utilities`）。`64a7cf4` 已使 `scripts/build-release.ps1` 支持稳定版构建；`src/lcmd/core/update.py` 已实现 GitHub 最新稳定 Release 元数据查询与本地版本比较；`src/lcmd/core/update_download.py` 已实现发行资产下载、大小/SHA-256/ZIP 完整性验证及下载文件原子落盘；`src/lcmd/core/knowledge_files.py` 已抽取知识库文件 SHA-256 清单、目录清单、目录身份和重解析点识别等公共安全工具，`migration.py` 已改为复用该模块并保留原有迁移内部接口。在线更新模块仍未接入 CLI，尚未执行知识库或主程序替换。
-- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1–3、阶段二 Windows 安装与内部测试发行环境任务 1–6 均已完成。主程序稳定 Release `v0.1.0` 与知识库稳定 Release `v0.1.0` 均已正式发布并通过 GitHub API 核验（均 `draft=false`、`prerelease=false`，资产状态 `uploaded`）。阶段三在线更新机制正在实施：任务 1“GitHub 稳定 Release 查询与版本比较”（提交 `959467f`）和任务 2“发行包下载与完整性验证”（提交 `27afcba`）已完成；任务 3“知识库独立更新”正在实施，当前已完成公共文件安全工具抽取及迁移模块兼容性回归验证（提交 `789a8f3`），知识库下载、解压、事务替换和中断恢复尚未实现。下一步继续任务 3，之后推进主程序及随包知识库更新、CLI 接入和故障恢复验收。启动时当前仍调用 `recover_migration()`，尚未接入知识库更新事务恢复。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `735ec6b`（`feat: add independent knowledge base updates`）。`64a7cf4` 已使 `scripts/build-release.ps1` 支持稳定版构建；`src/lcmd/core/update.py` 实现 GitHub 最新稳定 Release 元数据查询与版本比较；`src/lcmd/core/update_download.py` 实现发行资产下载及大小、SHA-256、ZIP 完整性验证；`src/lcmd/core/knowledge_files.py` 提供知识库文件清单、目录身份和重解析点识别等公共安全工具；`src/lcmd/core/update_knowledge.py` 已实现知识库独立更新、安全解压、版本/内容验证、目录事务替换和中断恢复。知识库更新恢复已接入 CLI 启动流程。`lcmd --update/-u` 尚未接入这些底层模块，主程序更新及主程序发行包随包知识库更新流程尚未实现。
+- 当前阶段：P6 架构及跨平台验收完成；阶段一任务 1–3、阶段二 Windows 安装与内部测试发行环境任务 1–6 均已完成。主程序稳定 Release `v0.1.0` 与知识库稳定 Release `v0.1.0` 均已正式发布并通过 GitHub API 核验（均 `draft=false`、`prerelease=false`，资产状态 `uploaded`）。阶段三在线更新机制：任务 1“GitHub 稳定 Release 查询与版本比较”（提交 `959467f`）、任务 2“发行包下载与完整性验证”（提交 `27afcba`）和任务 3“知识库独立更新”（提交 `735ec6b`）均已完成代码实现、自动化测试和推送。任务 3 已实现独立知识库更新及启动时事务恢复，但尚未接入 `lcmd --update/-u`；主程序更新、主程序发行包携带知识库同步更新及 CLI 总更新流程仍待后续任务实施。启动时依次执行 `recover_migration()` 与 `recover_knowledge_update()`，然后读取配置并加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；已作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
 
@@ -302,7 +302,8 @@ src/lcmd/
 | 模块 | 当前职责 |
 |---|---|
 | `cli/app.py` | Typer 应用、动态命令参数接管、初始化状态、配置查看与平台/语言切换、search 固定子命令及动态知识库查询 |
-| `core/config.py` | AppConfig、TOML 配置读取/校验/原子保存 |\n| `core/knowledge_files.py` | 知识库文件 SHA-256 清单、目录清单、目录身份及重解析点识别等底层公共安全工具；拒绝链接和特殊文件 |
+| `core/config.py` | AppConfig、TOML 配置读取/校验/原子保存 |
+| `core/knowledge_files.py` | 知识库文件 SHA-256 清单、目录清单、目录身份及重解析点识别等底层公共安全工具；拒绝链接和特殊文件 |
 | `core/paths.py` | platformdirs 用户配置目录、配置文件和默认知识库目录 |
 | `core/update.py` | GitHub 最新稳定 Release 元数据查询、Release 资产元数据验证、本地与远程三段式版本比较；不执行下载、解压或更新替换，尚未接入 CLI |
 | `core/update_download.py` | 下载 GitHub Release 资产；校验资产元数据、最终重定向地址、HTTP 状态、文件大小、SHA-256 和 ZIP CRC；使用同目录临时文件及 `os.replace()` 原子落盘，失败时保留原目标文件；不解压或替换知识库/主程序，尚未接入 CLI |
@@ -334,7 +335,7 @@ src/lcmd/
 | `lcmd -c --language en-US` / `lcmd -c -l en-US` | 验证并切换语言，成功后持久化 |
 | `lcmd -c -p linux -l zh-CN` | 验证最终平台/语言组合后一次性保存配置 |
 | `lcmd -c --path <目录>` | 调用 `migrate_knowledge()` 迁移知识库；目标已存在时询问是否覆盖，显示复制字节百分比进度、迁移成功/失败及旧目录清理警告 |
-| `lcmd --update` / `-u` | 当前仍显示“知识库更新功能尚未实现”；底层已具备稳定 Release 检查及发行资产下载/完整性验证能力，但尚未接入 CLI |
+| `lcmd --update` / `-u` | 当前仍显示“知识库更新功能尚未实现”；底层已具备主程序/知识库 Release 检查、发行资产下载验证及知识库独立更新能力，但总更新流程尚未接入 CLI |
 
 | `lcmd <command>` | 查询当前平台/语言的知识文档 |
 | `lcmd <tool>` | 显示工具入口页和可用子命令；无入口页时按单篇/多篇规则处理 |
@@ -375,7 +376,7 @@ src/lcmd/
 - 平台命令文档从当前 platform/language 加载；第三方工具文档从各工具当前 language 加载。没有当前语言目录或没有有效文档的工具不会阻断平台命令加载。
 - 当前平台/语言没有有效平台命令文档时，`load_knowledge` 报错。
 - 单篇文档失败时隔离该文档，不使其他文档失效。
-- 当前代码未实现知识库版本的远程检查、下载或替换。
+- 知识库独立 Release 检查、资产下载与验证、安全解压、Manifest/版本验证、目录事务替换和中断恢复已在 `core/update_knowledge.py` 实现；目前尚未接入 `lcmd --update/-u` CLI。
 
 ### 4.5 搜索与分页
 
@@ -442,7 +443,7 @@ language = "zh-CN"
 - 迁移失败会显示错误并以退出码 1 退出；旧知识库清理警告会显示给用户，但迁移仍报告成功。
 - CLI 使用 Rich 进度条显示知识库文件复制的字节百分比；该进度仅覆盖复制阶段，不代表完整性校验、配置切换和旧目录清理的整体进度。
 - 当前尚无 PowerShell 安装脚本负责部署发行包；也没有独立的备份、回滚或恢复默认路径功能。
-- `recover_migration()` 已接入启动流程；启动时先执行迁移恢复，再读取配置和初始化知识库。
+- `recover_migration()` 与 `recover_knowledge_update()` 均已接入启动流程；启动时先依次恢复迁移事务和知识库更新事务，再读取配置和初始化知识库。若知识库更新恢复状态不可信，CLI 会显示明确错误并以退出码 1 退出，不会继续加载知识库。
 
 ## 6. 当前已完成测试与验收
 
@@ -3008,7 +3009,62 @@ beta.9-build-fix8 真实发行构建与安装验收（用户在 Windows 11 build
 
 **任务 2 结论：** Release 资产下载、大小与 SHA-256 校验、ZIP 完整性检查及安全落盘模块已实现，专项测试和全项目回归测试通过并推送。当前尚未执行真实在线资产下载验收；下载模块也未解压资产、替换知识库/主程序或接入 CLI。下一步进入任务 3“知识库独立更新”，必须复用并评估现有迁移事务安全设计，不得直接把路径迁移函数用于同路径版本替换。
 
-## 6.18 阶段三任务 3：知识库独立更新——公共文件安全工具抽取\n\n用户完成公共安全工具抽取、迁移模块兼容性调整、专项测试、全项目回归、提交并推送；远程 `main` 已核验包含提交 `789a8f3`（`refactor: extract knowledge file safety utilities`）。\n\n实现文件：\n- `src/lcmd/core/knowledge_files.py`：新增底层公共文件安全工具模块。\n- `src/lcmd/core/migration.py`：移除原本重复实现的文件扫描/哈希和目录身份代码，改为调用公共模块；保留 `_is_reparse_point()`、`_get_directory_identity()`、`_get_file_manifest()` 迁移模块内部包装接口，并将公共模块异常转换为 `MigrationError`。迁移日志专用的 `_manifest_to_dict()`、`_manifest_from_dict()` 保持不变。\n- `tests/test_knowledge_files.py`：新增公共工具专项测试。\n\n公共工具当前能力：\n- `is_reparse_point()` 识别符号链接和 Windows 重解析点。\n- `get_directory_identity()` 获取目录的 device/inode 身份信息。\n- `get_file_manifest()` 递归生成相对路径 SHA-256 文件清单和排序后的目录清单；拒绝符号链接、重解析点及特殊文件。\n- 不引入第三方依赖，使用 Python 标准库。\n\n测试与质量检查（用户本地实际执行）：\n- `tests/test_knowledge_files.py` 与 `tests/test_migration.py` 定向测试：23 passed、2 skipped。跳过项分别为当前 Windows 环境不支持创建符号链接，以及 FIFO 文件测试不适用于 Windows。\n- 全项目 pytest：357 passed、6 skipped、0 failed。6 项跳过均为当前 Windows 环境不支持创建符号链接或 FIFO 文件。\n- 全项目 Ruff：`All checks passed!`。\n- `git diff --check`、`git diff --cached --check` 均通过。\n- 暂存区仅包含上述三个文件；用户保留的 `scripts/install.ps1` 修改、安装脚本备份文件和 `.pytest-temp/` 均未纳入提交。\n- 提交 `789a8f3` 已推送至 `origin/main`，用户终端确认远程分支从 `1d195b1` 前进至 `789a8f3`。\n\n**当前任务边界：** 本次只完成任务 3 的公共文件安全工具抽取和迁移兼容性回归验证；尚未实现知识库 Release 查询/下载流程、ZIP 安全解压、Manifest/版本一致性验证、目录事务替换、更新事务日志或中断恢复，也尚未将更新恢复接入 CLI 启动。不得将知识库独立更新描述为已完成。下一步在核对当前 `update.py`、`update_download.py`、`loader.py`、`path_security.py` 的实际接口和知识库 Release ZIP 目录结构后，继续实现任务 3 的安全解压与目录事务更新。\n\n## 16. 新功能开发前的代码定位规则
+## 6.18 阶段三任务 3：知识库独立更新——公共文件安全工具抽取
+
+用户完成公共安全工具抽取、迁移模块兼容性调整、专项测试、全项目回归、提交并推送；远程 `main` 包含提交 `789a8f3`（`refactor: extract knowledge file safety utilities`）。
+
+实现文件：
+- `src/lcmd/core/knowledge_files.py`：新增底层公共文件安全工具模块。
+- `src/lcmd/core/migration.py`：改为复用公共工具，保留迁移模块原有内部包装接口，并将公共模块异常转换为 `MigrationError`。
+- `tests/test_knowledge_files.py`：新增公共工具专项测试。
+
+公共工具能力：
+- `is_reparse_point()` 识别符号链接和 Windows 重解析点。
+- `get_directory_identity()` 获取目录 device/inode 身份信息。
+- `get_file_manifest()` 递归生成相对路径 SHA-256 文件清单及目录清单；拒绝链接、重解析点和特殊文件。
+- 使用 Python 标准库，不增加第三方依赖。
+
+该提交当时的本地验收结果：
+- `tests/test_knowledge_files.py` 与 `tests/test_migration.py`：23 passed、2 skipped。
+- 全项目 pytest：357 passed、6 skipped、0 failed。
+- Ruff：`All checks passed!`。
+- 6 项跳过均因 Windows 当前环境不支持创建符号链接或 FIFO 文件。
+
+**任务 3 后续实现与最终验收见 6.19。**
+
+## 6.19 阶段三任务 3：知识库独立更新与启动事务恢复
+
+用户完成知识库独立更新模块、CLI 启动恢复入口、专项测试和全项目回归；远程 `main` 已核验包含提交 `735ec6b`（`feat: add independent knowledge base updates`）。该提交基于 `789a8f3`，本次仅涉及以下四个文件：
+
+- `src/lcmd/core/update_knowledge.py`：新增知识库独立更新及事务恢复模块。
+- `tests/test_update_knowledge.py`：新增知识库更新专项测试。
+- `src/lcmd/cli/app.py`：在应用初始化时接入知识库更新恢复，并处理恢复失败。
+- `tests/test_cli.py`：验证启动恢复顺序和恢复失败时 CLI 的错误处理。
+
+模块实现能力：
+- 使用 `check_for_update()` 查询知识库仓库 `WenZoo1982/lcmd-kb` 的最新稳定 Release，并比较本地知识库版本；检查失败不会被当作“无更新”。
+- 选择符合预期命名且带 SHA-256 digest 的知识库 ZIP 资产，复用 `download_release_asset()` 下载并验证资产大小、SHA-256 和 ZIP 完整性。
+- 安全解压 ZIP，不使用无约束的 `extractall()`；校验归档成员路径，拒绝路径穿越、重复/冲突路径、符号链接、特殊文件及不受支持的归档项。
+- 使用现有 Loader 验证暂存知识库目录结构和指定 platform/language 下的有效文档，并验证 Manifest 版本与 Release 版本一致。
+- 使用公共 `knowledge_files.py` 工具生成目录身份和文件清单；在当前知识库目录同级准备新版和旧版备份，通过受保护的目录重命名事务替换知识库，保持配置中的 `knowledge_path` 不变。
+- 使用独立事务日志记录更新阶段；恢复时核对目录身份和文件清单，不仅依赖日志状态。可在证据充分时完成新版本、恢复旧版本或清理受控临时目录；状态不可信时保留现场并明确报错。
+- 更新过程不修改配置中的 `platform`、`language` 和 `knowledge_path`。
+- `recover_knowledge_update()` 已接入 `initialize_state()`：先执行 `recover_migration()`，再执行知识库更新恢复，然后读取配置和加载知识库。恢复失败会阻止初始化继续，并由 CLI 输出明确错误、以退出码 1 退出。
+- 本任务只实现知识库独立更新底层能力和启动恢复入口；没有接入 `lcmd --update/-u`，也没有实现主程序更新或主程序发行包随包知识库同步更新流程。
+
+测试与质量检查（用户本地实际执行）：
+- `tests/test_cli.py`：78 passed。
+- `tests/test_update_knowledge.py`：30 passed，1 条预期 warning（测试主动构造重复 ZIP 成员以验证拒绝重复名称）。
+- Ruff：`All checks passed!`；运行时有两条目录访问 warning，但检查最终通过。
+- 全项目 pytest：389 passed、6 skipped、0 failed，耗时 4.55 秒。
+- 6 项跳过均因当前 Windows 环境不支持创建符号链接或 FIFO 文件；1 条 ZIP warning 为重复成员测试的预期结果。
+- `git diff --check` 与 `git diff --cached --check` 均未发现空白错误；Git 显示的 LF/CRLF 提示为换行符转换警告。
+- 本次提交只包含上述四个任务文件；用户保留的 `scripts/install.ps1` 修改、安装脚本备份文件和 `.pytest-temp/` 均未纳入提交。
+- 提交 `735ec6b` 已推送至 `origin/main`。GitHub compare 核验显示 `789a8f3...735ec6b` 为 ahead、behind 为 0；该区间包含先前总控文档同步提交及本次代码提交。
+
+**任务 3 结论：** 知识库独立更新模块、目录事务替换、中断恢复及 CLI 启动恢复入口已实现，Ruff 和全项目自动化测试通过并推送。当前没有进行真实在线 Release 下载、真实知识库目录替换或故障注入验收，因此不得宣称这些场景已完成人工实机验收。CLI `--update/-u` 仍为占位提示；主程序更新、主程序发行包随包知识库同步更新及总更新流程集成留待后续任务。
+
+## 16. 新功能开发前的代码定位规则
 
 收到新功能需求后，先在总控文档中定位业务流程，再按以下顺序核对代码：
 
