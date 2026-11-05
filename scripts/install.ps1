@@ -1,4 +1,4 @@
-
+﻿
 #requires -Version 5.1
 
 <#
@@ -40,7 +40,9 @@ $script:AppStageDirectory = $null
 $script:KnowledgeStageDirectory = $null
 
 $script:CompletedStages = @()
+$script:CurrentStageIndex = 0
 $script:ExitCode = 0
+$script:ProgressTop = 0
 
 function Write-Section {
     param([string]$Title)
@@ -119,6 +121,106 @@ function Test-PathReparsePoints {
     return $false
 }
 
+function Write-InstallProgress {
+    param(
+        [Parameter(Mandatory = $true)]
+        [double]$Percent,
+
+        [switch]$NewStage
+    )
+
+    $Percent = [Math]::Max(0, [Math]::Min(100, $Percent))
+    $percentText = [int][Math]::Round($Percent)
+
+    # 计算中文和 ASCII 字符的控制台显示宽度。
+    $getDisplayWidth = {
+        param([string]$Text)
+
+        $width = 0
+
+        foreach ($character in $Text.ToCharArray()) {
+            if ([int]$character -gt 255) {
+                $width += 2
+            }
+            else {
+                $width += 1
+            }
+        }
+
+        return $width
+    }
+
+    if (-not $script:ProgressStageStarted) {
+
+
+        # 为两行进度和后续普通输出预留空间。
+        $requiredHeight = $script:ProgressTop + 3
+        $currentHeight = [Console]::BufferHeight
+
+        if ($currentHeight -lt $requiredHeight) {
+            [Console]::BufferHeight = $requiredHeight
+        }
+
+        if ([Console]::BufferHeight -lt $requiredHeight) {
+            throw "无法为安装进度区域分配足够的控制台缓冲区空间。"
+        }
+
+        $script:ProgressStageStarted = $true
+        $script:ProgressStageLineLength = 0
+        $script:ProgressLineLength = 0
+        $script:ProgressStageLeft = 0
+        $script:ProgressLineLeft = 0
+    }
+
+    $consoleWidth = [Console]::BufferWidth
+    $originalColor = [Console]::ForegroundColor
+
+    # 阶段切换：清除上一阶段的位置，再居中绘制新阶段。
+    if ($NewStage) {
+        $stageLine = $script:ProgressStageText
+        $stageWidth = & $getDisplayWidth $stageLine
+
+        if ($stageWidth -ge $consoleWidth) {
+            throw "控制台宽度不足，无法完整显示安装阶段名称。"
+        }
+
+        [Console]::SetCursorPosition(0, $script:ProgressTop)
+        [Console]::Write(" " * ($consoleWidth - 1))
+
+        $script:ProgressStageLeft = [Math]::Max(0, [int][Math]::Floor(($consoleWidth - $stageWidth) / 2))
+
+        [Console]::SetCursorPosition($script:ProgressStageLeft, $script:ProgressTop)
+        [Console]::ForegroundColor = [ConsoleColor]::Cyan
+        [Console]::Write($stageLine)
+
+        $script:ProgressStageLineLength = $stageWidth
+    }
+
+    # 百分比：只更新第二行，始终居中。
+    $progressLine = "已完成：$percentText%"
+    $progressWidth = & $getDisplayWidth $progressLine
+
+    if ($progressWidth -ge $consoleWidth) {
+        throw "控制台宽度不足，无法完整显示安装进度。"
+    }
+
+    [Console]::SetCursorPosition(0, $script:ProgressTop + 1)
+    [Console]::Write(" " * ($consoleWidth - 1))
+
+    $script:ProgressLineLeft = [Math]::Max(0, [int][Math]::Floor(($consoleWidth - $progressWidth) / 2))
+
+    [Console]::SetCursorPosition($script:ProgressLineLeft, $script:ProgressTop + 1)
+    [Console]::ForegroundColor = [ConsoleColor]::Green
+    [Console]::Write($progressLine)
+
+    $script:ProgressLineLength = $progressWidth
+
+    [Console]::ForegroundColor = $originalColor
+
+    # 普通输出位置保持在两行进度区域下方。
+    [Console]::SetCursorPosition(0, $script:ProgressTop + 2)
+}
+
 function Invoke-InstallStage {
     param(
         [Parameter(Mandatory = $true)]
@@ -131,12 +233,25 @@ function Invoke-InstallStage {
         [scriptblock]$Action
     )
 
-    Write-Section $Name
+    $script:CurrentStageIndex++
+
+    $stageIndex = $script:CurrentStageIndex
+
+    $stageStarts = @(0, 10, 20, 40, 60, 70, 85, 95)
+    $stageEnds = @(10, 20, 40, 60, 70, 85, 95, 100)
+
+    $script:CurrentStageStartPercent = $stageStarts[$stageIndex - 1]
+    $script:CurrentStageEndPercent = $stageEnds[$stageIndex - 1]
+
+    $script:ProgressStageText = "正在执行：$Name"
+
+    Write-InstallProgress -Percent $script:CurrentStageStartPercent -NewStage
 
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-    # 操作失败时立即抛出异常，不等待阶段最短显示时间。
-    $result = & $Action
+    # 隐藏阶段内部普通信息流输出，保留正常返回值和异常。
+    # 进度显示通过 Console 直接更新，不受此重定向影响。
+    $result = & $Action 6>$null
 
     $stopwatch.Stop()
 
@@ -146,8 +261,9 @@ function Invoke-InstallStage {
         Start-Sleep -Milliseconds $remaining
     }
 
-    Write-Host "阶段完成：$Name" -ForegroundColor Green
     $script:CompletedStages += $Name
+
+    Write-InstallProgress -Percent $script:CurrentStageEndPercent
 
     return $result
 }
@@ -705,21 +821,126 @@ function New-SiblingStageDirectory {
 
 function Copy-KnowledgeFiles {
     param(
+        [Parameter(Mandatory = $true)]
         [string]$Source,
+
+        [Parameter(Mandatory = $true)]
         [string]$Destination
     )
+
+    $sourceRoot = [System.IO.Path]::GetFullPath($Source).TrimEnd('\') + '\'
 
     if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
         New-Item -ItemType Directory -Path $Destination -Force |
             Out-Null
     }
 
-    $items = @(Get-ChildItem -LiteralPath $Source -Force -ErrorAction Stop)
+    # 获取全部目录，包括空目录和隐藏目录。
+    $directories = @(
+        Get-ChildItem -LiteralPath $Source `
+            -Directory -Recurse -Force -ErrorAction Stop
+    )
 
-    foreach ($item in $items) {
-        Copy-Item -LiteralPath $item.FullName `
-            -Destination $Destination -Recurse -Force -ErrorAction Stop
+    # 获取全部文件，包括隐藏文件。
+    $files = @(
+        Get-ChildItem -LiteralPath $Source `
+            -File -Recurse -Force -ErrorAction Stop
+    )
+
+    # 先建立完整目录结构，确保空目录也会保留。
+    foreach ($directory in $directories) {
+        $relativePath = $directory.FullName.Substring($sourceRoot.Length)
+        $targetDirectory = Join-Path $Destination $relativePath
+
+        if (-not (Test-Path -LiteralPath $targetDirectory -PathType Container)) {
+            New-Item -ItemType Directory -Path $targetDirectory -Force |
+                Out-Null
+        }
     }
+
+    $total = $files.Count
+    $completed = 0
+
+    foreach ($file in $files) {
+        $relativePath = $file.FullName.Substring($sourceRoot.Length)
+        $targetFile = Join-Path $Destination $relativePath
+        $targetParent = Split-Path -Parent $targetFile
+
+        if (-not (Test-Path -LiteralPath $targetParent -PathType Container)) {
+            New-Item -ItemType Directory -Path $targetParent -Force |
+                Out-Null
+        }
+
+        Copy-Item -LiteralPath $file.FullName `
+            -Destination $targetFile `
+            -Force `
+            -ErrorAction Stop
+
+        $completed++
+
+        Write-InstallProgress -Percent ($script:CurrentStageStartPercent + (($completed / $total) * ($script:CurrentStageEndPercent - $script:CurrentStageStartPercent)))
+    }
+
+
+
+}
+
+function Copy-AppFilesWithProgress {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Source,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Destination
+    )
+
+    $sourceRoot = [System.IO.Path]::GetFullPath($Source).TrimEnd('\') + '\'
+
+    # 获取主程序发行目录中的全部文件。
+    $files = @(
+        Get-ChildItem -LiteralPath $Source -File -Recurse -Force -ErrorAction Stop
+    )
+
+    # 先创建目录，保留原有目录结构。
+    $directories = @(
+        Get-ChildItem -LiteralPath $Source -Directory -Recurse -Force -ErrorAction Stop
+    )
+
+    foreach ($directory in $directories) {
+        $relativePath = $directory.FullName.Substring($sourceRoot.Length)
+        $targetDirectory = Join-Path $Destination $relativePath
+
+        if (-not (Test-Path -LiteralPath $targetDirectory -PathType Container)) {
+            New-Item -ItemType Directory -Path $targetDirectory -Force |
+                Out-Null
+        }
+    }
+
+    $total = $files.Count
+    $completed = 0
+
+    foreach ($file in $files) {
+        $relativePath = $file.FullName.Substring($sourceRoot.Length)
+        $targetFile = Join-Path $Destination $relativePath
+        $targetParent = Split-Path -Parent $targetFile
+
+        if (-not (Test-Path -LiteralPath $targetParent -PathType Container)) {
+            New-Item -ItemType Directory -Path $targetParent -Force |
+                Out-Null
+        }
+
+        Copy-Item -LiteralPath $file.FullName `
+            -Destination $targetFile `
+            -Force `
+            -ErrorAction Stop
+
+        $completed++
+
+        Write-InstallProgress -Percent ($script:CurrentStageStartPercent + (($completed / $total) * ($script:CurrentStageEndPercent - $script:CurrentStageStartPercent)))
+    }
+
+
+
 }
 
 function Write-InstallMarker {
@@ -899,10 +1120,20 @@ public static class LcmdEnvironmentNotification
 }
 
 try {
+    Clear-Host
+
     Write-Host ""
     Write-Host "LCMD Windows 安装程序" -ForegroundColor Cyan
-    Write-Host "统一安装与覆盖模式"
-    Write-Host "主程序安装路径固定，不提供自定义路径。"
+    Write-Host "统一安装与覆盖模式" -ForegroundColor DarkCyan
+    Write-Host "主程序安装路径固定，不提供自定义路径。" -ForegroundColor Blue
+    Write-Host ""
+
+    # 标题区域结束，固定两行进度显示的位置。
+    $script:ProgressTop = [Console]::CursorTop
+    $script:ProgressStageStarted = $false
+    $script:ProgressStageText = ""
+    $script:CurrentStageStartPercent = 0
+    $script:CurrentStageEndPercent = 0
 
     # ------------------------------------------------------------
     # 1. 环境检查
@@ -1040,13 +1271,10 @@ try {
             -Prefix ".lcmd-app-stage-"
 
         $appSource = Join-Path $script:PackageRoot "app"
-        $sourceItems = @(Get-ChildItem -LiteralPath $appSource -Force)
 
-        foreach ($item in $sourceItems) {
-            Copy-Item -LiteralPath $item.FullName `
-                -Destination $script:AppStageDirectory `
-                -Recurse -Force -ErrorAction Stop
-        }
+        Copy-AppFilesWithProgress `
+            -Source $appSource `
+            -Destination $script:AppStageDirectory
 
         $stagedExe = Join-Path $script:AppStageDirectory "lcmd.exe"
         $stagedInternal = Join-Path $script:AppStageDirectory "_internal"
@@ -1295,12 +1523,11 @@ try {
     # 7. PATH 环境变量配置
     # ------------------------------------------------------------
 
-    Write-Section "7/8 PATH 环境变量配置"
+    Invoke-InstallStage -Name "7/8 PATH 环境变量配置" -MinimumMilliseconds 800 -Action {
+        Add-LcmdToUserPath -InstallDirectory $script:InstallDirectory
 
-    Add-LcmdToUserPath -InstallDirectory $script:InstallDirectory
-    $script:CompletedStages += "PATH 环境变量配置"
-
-    Write-Host "当前用户 PATH 配置成功。" -ForegroundColor Green
+        Write-Host "当前用户 PATH 配置成功。"
+    } | Out-Null
 
     # ------------------------------------------------------------
     # 8. 完成收尾
@@ -1322,20 +1549,22 @@ try {
         Write-Host "安装身份标记：通过"
     } | Out-Null
 
+
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
     Write-Host "LCMD 安装成功！" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "请重新打开 PowerShell 或终端，然后运行："
-    Write-Host "  lcmd ls"
-    Write-Host "  lcmd --help"
-    Write-Host "  lcmd --version"
+    Write-Host "请重新打开 PowerShell 或终端，然后运行：" -ForegroundColor Cyan
+    Write-Host "  lcmd ls" -ForegroundColor Green
+    Write-Host "  lcmd --help" -ForegroundColor Green
+    Write-Host "  lcmd --version" -ForegroundColor Green
     Write-Host ""
-    Write-Host "INSTALL_RESULT=SUCCESS"
+    Write-Host "INSTALL_RESULT=SUCCESS" -ForegroundColor Green
 }
 catch {
     $script:ExitCode = 1
+
 
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Red
@@ -1344,21 +1573,21 @@ catch {
     Write-Host "停止原因：$($_.Exception.Message)" -ForegroundColor Red
 
     Write-Host ""
-    Write-Host "已完成阶段："
+    Write-Host "已完成阶段：" -ForegroundColor Cyan
 
     if ($script:CompletedStages.Count -eq 0) {
-        Write-Host "  无"
+        Write-Host "  无" -ForegroundColor DarkGray
     }
     else {
         foreach ($stage in $script:CompletedStages) {
-            Write-Host "  $stage"
+            Write-Host "  $stage" -ForegroundColor DarkGray
         }
     }
 
     Write-Host ""
-    Write-Host "INSTALL_RESULT=ERROR"
-    Write-Host "本版本不提供自动回滚；如安装中断，可重新运行同一安装包。"
-    Write-Host "重新运行同一安装包，将再次部署主程序、官方知识库并重新生成配置。"
+    Write-Host "INSTALL_RESULT=ERROR" -ForegroundColor Red
+    Write-Host "本版本不提供自动回滚；如安装中断，可重新运行同一安装包。" -ForegroundColor Yellow
+    Write-Host "重新运行同一安装包，将再次部署主程序、官方知识库并重新生成配置。" -ForegroundColor Yellow
 }
 finally {
     # 只清理本次运行创建、尚未提升为正式目录的临时目录。
