@@ -2936,13 +2936,13 @@ beta.9-build-fix8 真实发行构建与安装验收（用户在 Windows 11 build
 - Release：`v0.1.0`；Release URL：<https://github.com/WenZoo1982/lcmd-kb/releases/tag/v0.1.0>。
 - `draft=false`、`prerelease=false`。
 - 已上传资产：`lcmd-kb-0.1.0.zip`，状态 `uploaded`，大小 `11,945` bytes。
-- SHA-256：`594df745e3087068ca910398578e281ef9002f2ccf3806f45033f55a6abb6930)。
+- SHA-256：`594df745e3087068ca910398578e281ef9002f2ccf3806f45033f55a6abb6930`。
 - 下载地址：<https://github.com/WenZoo1982/lcmd-kb/releases/download/v0.1.0/lcmd-kb-0.1.0.zip>。
 
 **阶段结论：** 主程序和知识库均已有可获取的稳定 Release，阶段三在线更新机制的发布前置条件满足。两个 Release 的稳定状态不代表知识库内容已完成正式覆盖率验收；当前知识库仍为 13 篇 integration fixtures（15 个文件，含元数据）。
 
 **阶段三开始规则：** 暂不直接编写更新代码。先读取并核对当前版本的以下源码：
-1. `src/lcmd/cli/app.py)：`--update/-u` 入口及 CLI 初始化/分发行为。
+1. `src/lcmd/cli/app.py`：`--update/-u` 入口及 CLI 初始化/分发行为。
 2. 当前更新提示或更新模块：确认现有占位逻辑及其调用链。
 3. `scripts/build-release.ps1` 与发行包 `knowledge-integrity.json`：确认主程序版本、预发布标识、知识库版本及文件清单字段。
 4. `src/lcmd/core/migration.py`：确认迁移事务、校验、日志、恢复及清理实现。
