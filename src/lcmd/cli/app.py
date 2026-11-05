@@ -18,6 +18,10 @@ from lcmd.core.migration import (
     recover_migration,
 )
 from lcmd.core.paths import get_config_file, get_default_knowledge_path
+from lcmd.core.update_knowledge import (
+    KnowledgeUpdateError,
+    recover_knowledge_update,
+)
 from lcmd.knowledge.loader import (
     KnowledgeLoadError,
     discover_catalog,
@@ -147,11 +151,13 @@ def initialize_state(
     config_file: Path | None = None,
     default_knowledge_path: Path | None = None,
 ) -> AppState:
-    """恢复未完成的知识库迁移，然后初始化应用状态。"""
+    """恢复未完成的知识库迁移和更新事务，然后初始化应用状态。"""
     config_file = config_file or get_config_file()
 
-    # 必须先恢复迁移，再读取配置和加载知识库。
+    # 必须先恢复迁移，再恢复知识库更新。
+    # 两项恢复都必须在读取配置和加载知识库之前完成。
     recover_migration(config_file)
+    recover_knowledge_update(config_file)
 
     if config_file.is_file():
         config = load_config(config_file)
@@ -173,7 +179,6 @@ def initialize_state(
         save_config(config, config_file)
 
     return AppState(config=config, catalog=catalog, knowledge=knowledge)
-
 
 def switch_platform(state: AppState, platform: str, config_file: Path) -> AppState:
     """验证并切换平台，成功加载后才保存配置。"""
@@ -366,6 +371,9 @@ def create_app() -> typer.Typer:
             state = initialize_state()
         except MigrationError as exc:
             console.print(f"知识库迁移恢复失败：{exc}", style="red")
+            raise typer.Exit(code=1) from None
+        except KnowledgeUpdateError as exc:
+            console.print(f"知识库更新恢复失败：{exc}", style="red")
             raise typer.Exit(code=1) from None
         except (ConfigError, KnowledgeLoadError, OSError):
             console.print("LCMD 初始化失败，请检查配置。", style="red")
