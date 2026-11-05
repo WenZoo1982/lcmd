@@ -121,6 +121,72 @@ function Test-PathReparsePoints {
     return $false
 }
 
+function Write-InstallCenteredText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Text,
+
+        [ConsoleColor]$ForegroundColor = [ConsoleColor]::Gray
+    )
+
+    $consoleWidth = [Console]::BufferWidth
+
+    if ($consoleWidth -le 1) {
+        Write-Host $Text -ForegroundColor $ForegroundColor
+        return
+    }
+
+    $maxLineWidth = $consoleWidth - 1
+    $lines = New-Object System.Collections.Generic.List[string]
+    $currentLine = ""
+    $currentWidth = 0
+
+    foreach ($character in $Text.ToCharArray()) {
+        $characterWidth = 1
+
+        if ([int]$character -gt 255) {
+            $characterWidth = 2
+        }
+
+        if (
+            $currentWidth + $characterWidth -gt $maxLineWidth -and
+            $currentLine.Length -gt 0
+        ) {
+            $lines.Add($currentLine)
+            $currentLine = ""
+            $currentWidth = 0
+        }
+
+        $currentLine += [string]$character
+        $currentWidth += $characterWidth
+    }
+
+    if ($currentLine.Length -gt 0 -or $lines.Count -eq 0) {
+        $lines.Add($currentLine)
+    }
+
+    foreach ($line in $lines) {
+        $lineWidth = 0
+
+        foreach ($character in $line.ToCharArray()) {
+            if ([int]$character -gt 255) {
+                $lineWidth += 2
+            }
+            else {
+                $lineWidth++
+            }
+        }
+
+        $leftPadding = [Math]::Max(
+            0,
+            [int][Math]::Floor(($consoleWidth - $lineWidth) / 2)
+        )
+
+        Write-Host ((" " * $leftPadding) + $line) -ForegroundColor $ForegroundColor
+    }
+}
+
 function Write-InstallProgress {
     param(
         [Parameter(Mandatory = $true)]
@@ -1123,9 +1189,9 @@ try {
     Clear-Host
 
     Write-Host ""
-    Write-Host "LCMD Windows 安装程序" -ForegroundColor Cyan
-    Write-Host "统一安装与覆盖模式" -ForegroundColor DarkCyan
-    Write-Host "主程序安装路径固定，不提供自定义路径。" -ForegroundColor Blue
+    Write-InstallCenteredText "LCMD Windows 安装程序" -ForegroundColor Cyan
+    Write-InstallCenteredText "主程序 + 最新知识库" -ForegroundColor DarkCyan
+    Write-InstallCenteredText "本次安装为默认路径，有需要自定义路径，请自行设置。" -ForegroundColor Blue
     Write-Host ""
 
     # 标题区域结束，固定两行进度显示的位置。
@@ -1551,43 +1617,43 @@ try {
 
 
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host "LCMD 安装成功！" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Green
+    Write-InstallCenteredText "========================================" -ForegroundColor Green
+    Write-InstallCenteredText "LCMD 安装成功！" -ForegroundColor Green
+    Write-InstallCenteredText "========================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "请重新打开 PowerShell 或终端，然后运行：" -ForegroundColor Cyan
-    Write-Host "  lcmd ls" -ForegroundColor Green
-    Write-Host "  lcmd --help" -ForegroundColor Green
-    Write-Host "  lcmd --version" -ForegroundColor Green
+    Write-InstallCenteredText "请重新打开 PowerShell 或终端，然后运行：" -ForegroundColor Cyan
+
+    Write-InstallCenteredText "lcmd --help   查看 LCMD 使用说明" -ForegroundColor Green
+
     Write-Host ""
-    Write-Host "INSTALL_RESULT=SUCCESS" -ForegroundColor Green
+
 }
 catch {
     $script:ExitCode = 1
 
 
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Red
-    Write-Host "LCMD 安装失败" -ForegroundColor Red
-    Write-Host "========================================" -ForegroundColor Red
-    Write-Host "停止原因：$($_.Exception.Message)" -ForegroundColor Red
+    Write-InstallCenteredText "========================================" -ForegroundColor Red
+    Write-InstallCenteredText "LCMD 安装失败" -ForegroundColor Red
+    Write-InstallCenteredText "========================================" -ForegroundColor Red
+    Write-InstallCenteredText "停止原因：$($_.Exception.Message)" -ForegroundColor Red
 
     Write-Host ""
-    Write-Host "已完成阶段：" -ForegroundColor Cyan
+    Write-InstallCenteredText "已完成阶段：" -ForegroundColor Cyan
 
     if ($script:CompletedStages.Count -eq 0) {
-        Write-Host "  无" -ForegroundColor DarkGray
+        Write-InstallCenteredText "无" -ForegroundColor DarkGray
     }
     else {
         foreach ($stage in $script:CompletedStages) {
-            Write-Host "  $stage" -ForegroundColor DarkGray
+            Write-InstallCenteredText "$stage" -ForegroundColor DarkGray
         }
     }
 
     Write-Host ""
-    Write-Host "INSTALL_RESULT=ERROR" -ForegroundColor Red
-    Write-Host "本版本不提供自动回滚；如安装中断，可重新运行同一安装包。" -ForegroundColor Yellow
-    Write-Host "重新运行同一安装包，将再次部署主程序、官方知识库并重新生成配置。" -ForegroundColor Yellow
+    Write-InstallCenteredText "INSTALL_RESULT=ERROR" -ForegroundColor Red
+    Write-InstallCenteredText "本版本不提供自动回滚；如安装中断，可重新运行同一安装包。" -ForegroundColor Yellow
+    Write-InstallCenteredText "重新运行同一安装包，将再次部署主程序、官方知识库并重新生成配置。" -ForegroundColor Yellow
 }
 finally {
     # 只清理本次运行创建、尚未提升为正式目录的临时目录。

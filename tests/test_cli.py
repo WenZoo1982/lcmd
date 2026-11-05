@@ -1,3 +1,4 @@
+
 import warnings
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,7 +17,6 @@ from lcmd.core.migration import (
     MigrationError,
 )
 from lcmd.core.path_security import PathSecurityError
-from lcmd.core.update_knowledge import KnowledgeUpdateError
 from lcmd.knowledge.loader import KnowledgeLoadError
 
 runner = CliRunner()
@@ -155,14 +155,13 @@ def test_version_shows_unavailable_knowledge_base(monkeypatch):
         ["--version", "--path", "D:/KB"],
         ["--version", "--platform", "linux"],
         ["--version", "--language", "en-US"],
-        ["--version", "--update"],
     ],
 )
 def test_version_rejects_other_root_options(arguments, cli_mocks):
     result = runner.invoke(create_app(), arguments)
 
     assert result.exit_code == 2
-    assert "不能与配置或更新参数同时使用" in result.output
+    assert "不能与配置参数同时使用" in result.output
     cli_mocks["initialize"].assert_not_called()
 
 
@@ -514,21 +513,6 @@ def test_path_cannot_be_combined_with_platform_or_language(cli_mocks):
     assert "--path 不能与 --platform 或 --language 同时使用" in result.output
 
 
-def test_update_option_reports_not_implemented(cli_mocks):
-    result = runner.invoke(create_app(), ["-u"])
-
-    assert result.exit_code == 0
-    assert "知识库更新功能尚未实现" in result.output
-    cli_mocks["initialize"].assert_not_called()
-
-
-def test_update_cannot_be_combined_with_configuration(cli_mocks):
-    result = runner.invoke(create_app(), ["-u", "-c"])
-
-    assert result.exit_code == 2
-    assert "--update 不能与配置参数同时使用" in result.output
-
-
 def test_platform_switch_fails_when_knowledge_unavailable(cli_mocks):
     cli_mocks["initialize"].return_value = cli_app.AppState(
         config=cli_mocks["state"].config,
@@ -656,7 +640,7 @@ def test_initialize_state_does_not_save_when_loading_fails(
     save_config.assert_not_called()
 
 
-def test_initialize_state_recovers_transactions_before_loading_knowledge(
+def test_initialize_state_recovers_migration_before_loading_knowledge(
     tmp_path,
     monkeypatch,
 ):
@@ -675,10 +659,6 @@ def test_initialize_state_recovers_transactions_before_loading_knowledge(
         events.append("recover_migration")
         assert path == config_file
 
-    def recover_knowledge_update(path):
-        events.append("recover_knowledge_update")
-        assert path == config_file
-
     def load_config(path):
         events.append("load_config")
         return config
@@ -692,11 +672,6 @@ def test_initialize_state_recovers_transactions_before_loading_knowledge(
         return Mock()
 
     monkeypatch.setattr(cli_app, "recover_migration", recover_migration)
-    monkeypatch.setattr(
-        cli_app,
-        "recover_knowledge_update",
-        recover_knowledge_update,
-    )
     monkeypatch.setattr(cli_app, "load_config", load_config)
     monkeypatch.setattr(cli_app, "discover_catalog", discover_catalog)
     monkeypatch.setattr(cli_app, "load_knowledge", load_knowledge)
@@ -706,11 +681,11 @@ def test_initialize_state_recovers_transactions_before_loading_knowledge(
     assert state.config == config
     assert events == [
         "recover_migration",
-        "recover_knowledge_update",
         "load_config",
         "discover_catalog",
         "load_knowledge",
     ]
+
 
 def test_initialize_state_stops_when_migration_recovery_fails(
     tmp_path,
@@ -730,16 +705,6 @@ def test_initialize_state_stops_when_migration_recovery_fails(
     recover.assert_called_once_with(config_file)
     load_config.assert_not_called()
 
-def test_cli_reports_knowledge_update_recovery_failure(cli_mocks):
-    cli_mocks["initialize"].side_effect = KnowledgeUpdateError(
-        "更新事务记录损坏"
-    )
-
-    result = runner.invoke(create_app(), ["ls"])
-
-    assert result.exit_code == 1
-    assert "知识库更新恢复失败" in result.output
-    assert "更新事务记录损坏" in result.output
 
 def test_cli_reports_migration_recovery_failure(cli_mocks):
     cli_mocks["initialize"].side_effect = MigrationError("迁移记录损坏")
@@ -750,35 +715,6 @@ def test_cli_reports_migration_recovery_failure(cli_mocks):
     assert "知识库迁移恢复失败" in result.output
     assert "迁移记录损坏" in result.output
 
-def test_initialize_state_stops_when_knowledge_update_recovery_fails(
-    tmp_path,
-    monkeypatch,
-):
-    config_file = tmp_path / "config.toml"
-
-    recover_migration = Mock()
-    recover_knowledge_update = Mock(
-        side_effect=KnowledgeUpdateError("更新事务记录损坏")
-    )
-    load_config = Mock()
-
-    monkeypatch.setattr(cli_app, "recover_migration", recover_migration)
-    monkeypatch.setattr(
-        cli_app,
-        "recover_knowledge_update",
-        recover_knowledge_update,
-    )
-    monkeypatch.setattr(cli_app, "load_config", load_config)
-
-    with pytest.raises(
-        KnowledgeUpdateError,
-        match="更新事务记录损坏",
-    ):
-        cli_app.initialize_state(config_file)
-
-    recover_migration.assert_called_once_with(config_file)
-    recover_knowledge_update.assert_called_once_with(config_file)
-    load_config.assert_not_called()
 
 def test_switch_platform_saves_after_success(tmp_path, monkeypatch):
     state = cli_app.AppState(

@@ -1,6 +1,8 @@
-﻿param(
+﻿
+param(
     [Parameter(Mandatory = $true)]
     [string]$MainVersion,
+
     [Parameter(Mandatory = $false)]
     [string]$Prerelease = "",
 
@@ -87,12 +89,14 @@ try {
     }
 
     Write-Host "主程序版本：$MainVersion"
+
     if ([string]::IsNullOrEmpty($Prerelease)) {
         Write-Host "发行类型：稳定版"
     }
     else {
         Write-Host "Pre-release：$Prerelease"
     }
+
     Write-Host "安装脚本：$installScript"
 
     Write-Host "`n========== 知识库 ZIP 校验 ==========" -ForegroundColor Cyan
