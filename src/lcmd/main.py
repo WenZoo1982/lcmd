@@ -153,7 +153,7 @@ def main() -> None:
         raise SystemExit(_validate_install_knowledge(arguments[1]))
 
     app = create_app()
-    app()
+    app(prog_name="lcmd")
 
 
 if __name__ == "__main__":

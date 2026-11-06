@@ -10,6 +10,7 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn
 from typer.core import TyperGroup
 
 from lcmd import __version__
+from lcmd.cli.help import LocalizedTyperCommand, render_main_help
 from lcmd.core.config import AppConfig, ConfigError, load_config, save_config
 from lcmd.core.migration import (
     MigrationCleanupWarning,
@@ -118,6 +119,9 @@ class DynamicTyperGroup(TyperGroup):
             break
 
         return super().parse_args(ctx, normalized)
+
+    def get_help(self, ctx: typer.Context) -> str:
+        return render_main_help(ctx)
 
     def resolve_command(
         self,
@@ -491,7 +495,7 @@ def create_app() -> typer.Typer:
             console.print(ctx.get_help())
             raise typer.Exit()
 
-    @app.command("search")
+    @app.command("search", cls=LocalizedTyperCommand)
     def search_command(
         ctx: typer.Context,
         keyword: Annotated[

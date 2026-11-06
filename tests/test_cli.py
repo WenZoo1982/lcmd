@@ -1099,7 +1099,7 @@ def test_normal_main_still_starts_cli(monkeypatch):
     main_module.main()
 
     create_app.assert_called_once_with()
-    app.assert_called_once_with()
+    app.assert_called_once_with(prog_name="lcmd")
 
 
 def test_internal_inspect_config_outputs_knowledge_path(
