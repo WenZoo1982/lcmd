@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `9b71b67`（`Remove automatic update functionality`）。该提交彻底移除了 CLI 自动更新入口、自动更新业务模块、更新下载/知识库更新模块及其专项测试，并同步调整发行构建脚本，不再把 `update.ps1` 纳入发行包。当前版本不提供 `lcmd --update/-u` 自动更新；用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
-- 当前阶段：自动更新功能已取消；Windows 发行包已完成构建、安装及 CLI 真实验收。主程序稳定 Release `v0.1.0` 与知识库稳定 Release `v0.1.0` 已正式发布。后续开发路线已确定：阶段一完善 CLI 帮助系统并扩充 Linux、Windows PowerShell 及 Git/SSH/Docker 等第三方工具知识库；阶段二完成 Linux 打包、安装部署与 Linux Mint 测试；阶段三进行跨平台最终验收、文档完善和正式发布准备。以上均为后续计划，不代表相关功能或知识库内容已经实现。当前版本通过 GitHub Releases 手动下载发行包，运行 `install.ps1` 安装或升级。启动时只执行 `recover_migration()`，然后读取配置并加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `eb7ab15`（`feat: add localized CLI help system`）。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
+- 当前阶段：自动更新功能已取消；Windows 发行包已完成构建、安装及 CLI 真实验收。CLI 中英文帮助系统已实现并完成自动化测试，详细记录见 6.22；阶段一剩余工作为核对知识库规范并补充 Linux、Windows PowerShell、Git/SSH/Docker 等命令文档。阶段二为 Linux 打包、安装部署与 Linux Mint 测试；阶段三为跨平台最终验收、文档完善和正式发布准备。以上后续事项按各自验收证据标记状态。当前版本通过 GitHub Releases 手动下载发行包，运行 `install.ps1` 安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；此前曾作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
 
@@ -304,6 +304,7 @@ src/lcmd/
 | 模块 | 当前职责 |
 |---|---|
 | `cli/app.py` | Typer 应用、动态命令参数接管、初始化状态、配置查看与平台/语言切换、search 固定子命令及动态知识库查询 |
+| `cli/help.py` | 系统界面语言检测、中英文主帮助与 search 帮助渲染、自定义 Typer 帮助命令 |
 | `core/config.py` | AppConfig、TOML 配置读取/校验/原子保存 |
 | `core/knowledge_files.py` | 知识库文件 SHA-256 清单、目录清单、目录身份及重解析点识别等底层公共安全工具；拒绝链接和特殊文件 |
 | `core/paths.py` | platformdirs 用户配置目录、配置文件和默认知识库目录 |
@@ -326,7 +327,8 @@ src/lcmd/
 |---|---|
 | 调用 | 当前行为 |
 |---|---|
-| `lcmd --help` / `-h` | 显示 Typer 帮助 |
+| `lcmd --help` / `-h` | 根据系统界面语言显示中文或英文主帮助；单语言显示，中文以外默认英文 |
+| `lcmd search --help` | 显示当前帮助语言对应的搜索帮助，说明关键词参数与 `--full` |
 | `lcmd --version` / `-v` | 显示主程序版本及本地知识库版本；版本入口独立处理，不进入普通知识库查询 |
 | `lcmd --config` / `-c` | 显示当前知识库路径、平台和语言 |
 | `lcmd -c --platform` / `lcmd -c -p` | 显示当前平台及知识库发现的可用平台 |
@@ -346,7 +348,6 @@ src/lcmd/
 
 当前仍未实现：
 
-- 最终完整帮助文档；当前帮助仍由 Typer 根据参数定义生成。
 - 系统命令执行、系统命令安装检测或在线搜索功能。
 
 `--path`、`--platform`、`--language` 必须配合 `--config/-c`；`--path` 与平台/语言设置互斥。平台和语言可单独或同时修改。
@@ -897,7 +898,8 @@ PyInstaller onedir 与 `scripts/build-release.ps1` 已保留；阶段二不重�
 | `switch_language(state, language, config_file)` | 要求已有 catalog；先加载当前平台/新语言，再保存配置；成功后返回新 AppState。 |
 | `_show_platforms()` / `_show_languages()` | 展示当前选择和 catalog 实际发现的可用值；catalog 不可用或平台不存在时显示提示。 |
 | `_show_version()` | 显示程序版本；只读取配置和发现 Manifest/catalog 版本，不加载 Markdown 文档，也不写配置。 |
-| `create_app()` | 注册 Typer 应用、根 callback 和 search/platform/language 命令；动态查询在根 callback 中处理；配置模式下的 `--path` 调用迁移 API 并处理覆盖确认、迁移错误和清理警告。 |
+| `create_app()` | 注册 Typer 应用、根 callback 和 search/platform/language 命令；根帮助由 `DynamicTyperGroup.get_help()` 调用 `render_main_help()`，search 使用 `LocalizedTyperCommand`；动态查询在根 callback 中处理；配置模式下的 `--path` 调用迁移 API 并处理覆盖确认、迁移错误和清理警告。 |
+| `help.py`：`get_help_language()`、`render_main_help()`、`render_search_help()` | 根据系统界面语言选择中文或英文帮助；中文以外默认英文；主帮助和 search 帮助均采用自定义 Rich 布局。 |
 
 根 callback 的执行顺序是：若指定 `--version`，先走版本专用路径并退出；否则初始化 AppState 并放入根 Context。配置模式下若指定 `--path`，调用 `migrate_knowledge()` 并传入进度回调；Rich 显示复制阶段的字节百分比进度。目标已存在时捕获 `MigrationConfirmationRequired` 并请求用户确认，确认后以 `overwrite=True` 重试且继续传入进度回调，取消则退出；迁移错误显示原因并以退出码 1 退出，清理警告会显示但不阻止成功结果。若解析器记录了动态参数，则要求 knowledge 可用，调用 `query_document()` 和 `render_query_result()` 后退出；否则由 Typer 调用注册的 search/platform/language 命令。没有子命令时显示帮助。
 
@@ -3069,16 +3071,16 @@ beta.9-build-fix8 真实发行构建与安装验收（用户在 Windows 11 build
 
 自动更新功能取消及 Windows 发行包验收完成后，LCMD 后续工作按以下三个阶段推进。本节记录的是已确定的开发计划；除非后续任务有明确测试和验收证据，不得将计划项描述为已实现。
 
-### 阶段一：帮助系统与知识库完善（下一阶段）
+### 阶段一：帮助系统与知识库完善（进行中）
 
 **目标：** 让 LCMD 的命令帮助、参数说明和使用指引完整、准确、易懂，同时逐步补充多平台和常用第三方工具知识库。
 
-CLI 帮助系统：
-- 完善主帮助 `lcmd --help`。
-- 完善命令及参数帮助。
-- 补充常用操作示例。
-- 改进错误提示和使用引导。
-- 确保帮助文案与实际 CLI 功能、参数行为一致。
+CLI 帮助系统（已完成本轮帮助实现，后续仍需随 CLI 功能变化维护）：
+- 已实现主帮助 `lcmd --help` 和搜索帮助 `lcmd search --help` 的中英文自定义布局。
+- 帮助语言根据系统界面语言自动选择；中文系统显示中文，其他语言默认英文；帮助语言与知识库查询语言设置相互独立。
+- 已说明动态命令查询、搜索、配置、迁移、参数组合约束和常用示例。
+- 已为帮助系统增加语言检测及中英文输出测试。
+- 错误提示本地化和后续新增命令/参数的帮助维护仍需按实际功能继续检查。
 
 知识库内容建设：
 - 补充第三方命令行工具文档，首批包括 Git、SSH、Docker。
@@ -3088,8 +3090,8 @@ CLI 帮助系统：
 - 知识库文档遵循现有目录、语言、Front Matter 和 Markdown 文档合同；新增内容不应仅因文档数量增加而修改主程序。
 
 建议推进顺序：
-1. 盘点当前 CLI 实际功能、参数和帮助输出。
-2. 完成主帮助、参数帮助、示例和错误引导。
+1. 盘点当前 CLI 实际功能、参数和帮助输出。（已完成，见本轮 6.22）
+2. 完成主帮助、参数帮助、示例和错误引导。（主帮助与 search 帮助已完成；错误提示本地化仍待检查，见 6.22）
 3. 核对并稳定知识库分类、目录结构和文档规范。
 4. 补充 Linux 命令文档。
 5. 补充 Windows PowerShell 命令文档。
@@ -3121,6 +3123,41 @@ CLI 帮助系统：
 | 正式版本准备 | 检查版本号、发行包内容、校验信息和 GitHub Releases |
 
 **阶段边界：** 阶段一主要涉及主程序 CLI 帮助与知识库仓库内容；阶段二主要涉及 Linux 平台发行和安装部署；阶段三负责跨平台整体验收与正式发布准备。三个阶段均需按具体任务分别记录代码/知识库提交、测试结果和验收证据。主程序与知识库继续独立维护、独立递增版本号和独立发布。
+
+## 6.22 阶段一：CLI 中英文帮助系统实现与自动化验收（提交 `eb7ab15`）
+
+用户完成 CLI 帮助系统实现、定向测试、全项目回归、提交并推送。主程序 `main` 分支已推送提交 `eb7ab15`（`feat: add localized CLI help system`），远程分支从 `711a73d` 前进至 `eb7ab15`。
+
+本轮实现文件：
+
+- `src/lcmd/cli/help.py`：新增帮助语言检测、Rich 帮助布局和中英文文案。
+- `src/lcmd/cli/app.py`：`DynamicTyperGroup.get_help()` 接入自定义主帮助；search 命令使用 `LocalizedTyperCommand`。
+- `src/lcmd/main.py`：调用 Typer app 时固定传入 `prog_name="lcmd"`，确保帮助 Usage 显示 `lcmd`，而不是 `python -m lcmd`。
+- `tests/test_help.py`：新增帮助语言检测、中英文主帮助和搜索帮助测试。
+- `tests/test_cli.py`：同步调整入口测试，断言 app 以 `prog_name="lcmd"` 调用。
+
+当前帮助系统行为：
+
+- 根据系统界面语言自动选择帮助语言；中文系统显示中文，中文以外的系统语言默认显示英文。
+- Windows 优先读取用户默认 UI Language；API 不可用时回退到 locale 检测。非 Windows 系统检查可用 locale；无法识别时默认英文。
+- 主帮助和 `lcmd search --help` 均使用自定义中英文布局，不采用 Typer 默认帮助文案。
+- 帮助界面单语言显示，不并列输出中英文；帮助语言与 `--language/-l` 控制的知识库查询语言相互独立。
+- 短参数采用强调色，长参数保持普通颜色。
+- 主帮助覆盖动态命令查询、search、配置查看/修改、知识库迁移、常用示例及参数约束。
+- 帮助文案明确：`--path`、`--platform`、`--language` 均须配合 `--config/-c`；`--path` 不得与 `--platform` 或 `--language` 同时使用；平台与语言可以同时设置。
+- 搜索帮助说明一个或多个关键词、`--full` 全文搜索及对应示例。
+
+测试与质量检查（用户本地实际执行）：
+
+- 中文主帮助和中文搜索帮助通过 CLI 实际输出验收。
+- 英文主帮助和英文搜索帮助通过临时替换语言检测函数的 CliRunner 运行验收；未修改系统语言或正式语言检测逻辑。
+- `tests/test_help.py`：17 passed。
+- 全项目 Ruff：`ruff check src tests`，`All checks passed!`。
+- 全项目 pytest：`300 passed, 6 skipped, 0 failed`，共收集 306 项；6 项跳过均因当前 Windows 环境不支持对应符号链接或 FIFO 测试。
+- `git diff --cached --check` 通过。
+- 本次提交仅包含 `src/lcmd/cli/app.py`、`src/lcmd/cli/help.py`、`src/lcmd/main.py`、`tests/test_cli.py`、`tests/test_help.py` 五个文件；未跟踪的 pytest 临时目录和安装脚本备份文件未纳入提交。
+
+**任务结论与边界：** CLI 主帮助和 search 帮助的中英文实现、语言选择及基础自动化测试已完成并推送。错误提示的全面本地化、未来新增命令/参数的帮助维护，以及阶段一知识库内容扩充仍未完成；不得将阶段一整体标记为完成。
 
 ## 16. 新功能开发前的代码定位规则
 
