@@ -1,10 +1,12 @@
 import sys
 from pathlib import PurePosixPath
 
+from rich.columns import Columns
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from lcmd.knowledge.models import KnowledgeDocument, QueryResult, SearchResult
 
@@ -77,19 +79,20 @@ def render_query_result(
         render_document(document, output)
 
     if result.children:
-        table = Table(
-            title="可用子命令",
-            show_header=True,
-            header_style="bold cyan",
+        commands = Columns(
+            [Text(child, style="green") for child in result.children],
+            equal=False,
             expand=True,
         )
 
-        table.add_column("子命令", style="green")
-
-        for child in result.children:
-            table.add_row(child)
-
-        output.print(table)
+        output.print(
+            Panel(
+                commands,
+                title="可用子命令",
+                border_style="cyan",
+                expand=True,
+            )
+        )
 
 
 def _render_search_page(
