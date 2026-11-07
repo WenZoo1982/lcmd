@@ -112,7 +112,13 @@ def _validate_integrity_manifest(data: dict[str, Any]) -> KnowledgeDistributionI
         raise KnowledgeIntegrityError("主程序版本号格式无效。")
 
     main_prerelease = data["main_prerelease"]
-    if not isinstance(main_prerelease, str) or not _PRERELEASE_PATTERN.fullmatch(main_prerelease):
+    if (
+        not isinstance(main_prerelease, str)
+        or (
+            main_prerelease != ""
+            and not _PRERELEASE_PATTERN.fullmatch(main_prerelease)
+        )
+    ):
         raise KnowledgeIntegrityError("主程序预发布版本标识无效。")
 
     knowledge_version = data["knowledge_version"]

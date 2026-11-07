@@ -90,6 +90,26 @@ def test_verify_valid_distribution(tmp_path: Path) -> None:
     assert result.file_count == 2
 
 
+def test_verify_accepts_stable_release_without_prerelease(
+    tmp_path: Path,
+) -> None:
+    knowledge_dir, integrity_file = _write_distribution(tmp_path)
+
+    data = json.loads(integrity_file.read_text(encoding="utf-8"))
+    data["main_prerelease"] = ""
+    integrity_file.write_text(
+        json.dumps(data),
+        encoding="utf-8",
+    )
+
+    result = verify_knowledge_distribution(
+        knowledge_dir,
+        integrity_file,
+    )
+
+    assert result.main_prerelease == ""
+
+
 def test_verify_rejects_modified_file(tmp_path: Path) -> None:
     knowledge_dir, integrity_file = _write_distribution(tmp_path)
 

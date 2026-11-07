@@ -1608,6 +1608,11 @@ try {
             throw "安装身份标记中的主程序版本与发行包不一致。"
         }
 
+        $installedUninstaller = Join-Path $script:InstallDirectory "uninstall.ps1"
+        if (-not (Test-Path -LiteralPath $installedUninstaller -PathType Leaf)) {
+            throw "安装目录缺少 uninstall.ps1，当前发行包不完整。"
+        }
+
         Write-Host "安装目录：$script:InstallDirectory"
         Write-Host "配置文件：$script:ConfigFile"
         Write-Host "知识库目录：$script:KnowledgePath"

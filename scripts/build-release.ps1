@@ -23,6 +23,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $python = Join-Path $repoRoot ".venv\Scripts\python.exe"
 $specFile = Join-Path $repoRoot "lcmd.spec"
 $installScript = Join-Path $PSScriptRoot "install.ps1"
+$uninstallScript = Join-Path $PSScriptRoot "uninstall.ps1"
 
 $outputCreated = $false
 $buildSucceeded = $false
@@ -51,6 +52,10 @@ try {
 
     if (-not (Test-Path $installScript -PathType Leaf)) {
         throw "未找到安装脚本：$installScript"
+    }
+
+    if (-not (Test-Path $uninstallScript -PathType Leaf)) {
+        throw "未找到卸载脚本：$uninstallScript"
     }
 
     if (-not (Test-Path $KnowledgeArchive -PathType Leaf)) {
@@ -210,6 +215,18 @@ try {
 
         Copy-Item -Path $distDir -Destination $appDir -Recurse
         Copy-Item -Path $knowledgeSource -Destination $knowledgeDir -Recurse
+
+        $uninstallScriptTarget = Join-Path $appDir "uninstall.ps1"
+        Copy-Item -LiteralPath $uninstallScript -Destination $uninstallScriptTarget
+
+        $sourceUninstallHash = (Get-FileHash $uninstallScript -Algorithm SHA256).Hash
+        $targetUninstallHash = (Get-FileHash $uninstallScriptTarget -Algorithm SHA256).Hash
+
+        if ($sourceUninstallHash -ne $targetUninstallHash) {
+            throw "发行包 app\\uninstall.ps1 与源卸载脚本 SHA-256 不一致。"
+        }
+
+        Write-Host "卸载脚本已复制到 app 目录并通过 SHA-256 校验。" -ForegroundColor Green
 
         Write-Host "`n========== 复制并验证安装脚本 ==========" -ForegroundColor Cyan
 
