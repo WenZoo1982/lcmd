@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `779a879`（`feat: add Linux build and installation support`）；此前已完成 CLI 中英文帮助系统（`eb7ab15`）、Renderer 横向多列布局（`29c7bd0`）及 pytest 跨平台修复（`26fcb67`）。Linux beta.10 构建、安装、CLI 使用和卸载验收已完成，详见 6.26。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行对应平台安装脚本完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
-- 当前阶段：自动更新功能已取消；Windows 与 Linux beta.10 发行包均已完成构建、安装和 CLI 真实验收。Linux Mint 22.3 的 beta.10 首次安装、版本/帮助/查询功能及卸载均已实际验收，详见 6.26。CLI 中英文帮助系统、Renderer 横向多列布局及 pytest 跨平台修复已完成对应自动化测试；Renderer 与 pytest 修复已完成 Windows/Linux Mint 双平台验收，详见 6.22–6.24。知识库已扩充至 578 篇 Markdown 文档，目录调整和 Front Matter 格式检查已完成，详见 6.25；仍需进行代表性 CLI 查询覆盖、内容准确性抽查和正式版本发布准备。阶段二 Linux 打包、安装部署与 Linux Mint 测试已完成；阶段三跨平台最终验收、文档完善和正式发布准备待推进。当前版本通过 GitHub Releases 手动下载发行包，运行对应平台安装脚本安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `bd6b9a8`（`feat: add cross-platform uninstall support`）；此前已完成 Linux 打包与安装支持（`779a879`）、CLI 中英文帮助系统（`eb7ab15`）、Renderer 横向多列布局（`29c7bd0`）及 pytest 跨平台修复（`26fcb67`）。Windows 与 Linux beta.10 的构建、安装、CLI 使用和卸载验收均已完成，详见 6.26–6.27。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行对应平台安装脚本完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
+- 当前阶段：自动更新功能已取消；Windows 与 Linux beta.10 发行包均已完成构建、安装、CLI 和卸载真实验收。Windows beta.10 的固定目录安装、配置初始化、PATH、版本/帮助/查询及卸载均已实际验收；Linux Mint 22.3 的 beta.10 首次安装、版本/帮助/查询及卸载也已实际验收，详见 6.26–6.27。跨平台卸载脚本及安装标记校验已加入主程序，完成 Windows 全量自动化测试和 Ruff 检查。CLI 中英文帮助系统、Renderer 横向多列布局及 pytest 跨平台修复已完成对应自动化测试；Renderer 与 pytest 修复已完成 Windows/Linux Mint 双平台验收，详见 6.22–6.24。知识库已扩充至 578 篇 Markdown 文档，目录调整和 Front Matter 格式检查已完成，详见 6.25；仍需进行代表性 CLI 查询覆盖、内容准确性抽查和正式版本发布准备。阶段二 Linux 打包、安装部署与 Linux Mint 测试已完成；阶段三跨平台最终验收、文档完善和正式发布准备待推进。当前版本通过 GitHub Releases 手动下载发行包，运行对应平台安装脚本安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库 Manifest：`0.1.0`。知识库 `main` 分支已包含后续扩充内容（提交 `3ef4659`，共 578 篇 Markdown 文档）；稳定 Release `v0.1.0` 仍是此前发布的旧快照，新内容尚未创建新的版本化 Release。
 
@@ -3323,3 +3323,56 @@ Windows 验收（用户本地实际执行）：
 - 用户执行 `git push origin main` 成功；远程 `main` 从 `d921c98` 前进至 `779a879`。
 
 **任务结论与边界：** Linux beta.10 的构建、首次安装、版本/帮助/查询及卸载真实验收已完成；Linux 平台实现已推送至主程序仓库 `main` 分支。以上记录不代表 Linux beta.10 已创建 GitHub Release，也不代表正式版本发布准备完成。后续仍需推进跨平台最终验收、文档完善、知识库内容准确性抽查及正式发布准备。
+
+## 6.27 Windows beta.10 安装/卸载真实验收与跨平台卸载支持（提交 `bd6b9a8`）
+
+用户完成 Windows beta.10 发行包的真实安装、CLI 功能和真实卸载验收，并将跨平台卸载支持推送至主程序仓库 `main` 分支。
+
+### Windows beta.10 真实安装与 CLI 验收
+
+- 发行包目录：`D:\Project_DEV\lcmd-releases\lcmd-windows-0.1.0-beta.10`。
+- 主程序固定安装目录：`%LOCALAPPDATA%\Programs\LCMD`；知识库目录：`%LOCALAPPDATA%\lcmd\knowledge`；配置文件：`%LOCALAPPDATA%\lcmd\config.toml`。
+- 安装器完成全部 8 个阶段，界面显示 8/8、100% 和安装成功。
+- 安装目录包含 `_internal`、`.lcmd-install.json`、`lcmd.exe` 和 `uninstall.ps1`。发行包内与安装后的卸载脚本 SHA-256 一致。
+- `Get-Command lcmd` 指向固定安装目录；用户 PATH 已正确添加该目录。
+- `lcmd --version` 正确显示主程序版本 `0.1.0` 和知识库版本 `0.1.0`；`lcmd --help` 正常显示中文帮助。
+- `lcmd git init`、`lcmd dir` 和 `lcmd search 文件` 查询/搜索正常，搜索返回 10 条结果且分页退出正常；Windows 平台下 `lcmd ls` 未找到，符合当前平台知识库配置预期。
+- 配置内容为 platform=`windows`、language=`zh-CN`，知识库目录共有 601 个文件；安装标记中的产品身份、标记版本、主程序版本和安装目录均正确。
+
+### Windows 真实卸载验收
+
+- 用户按卸载器交互提示明确输入 `y` 后继续卸载；卸载器四阶段全部完成，显示 4/4、100% 和卸载成功。
+- 卸载后确认固定主程序目录、默认知识库目录、配置文件及 LCMD 数据目录均不存在。
+- 用户 PATH 中不再包含 LCMD 安装目录；当前 PowerShell 的 `Get-Command lcmd` 无结果。
+- 未发现超出 LCMD 管理范围的删除或残留。
+
+### 跨平台卸载支持实现
+
+本次主程序提交包含以下 8 个文件：
+
+- `scripts/build-release.ps1`：发行构建时复制 `scripts/uninstall.ps1` 至发行包 `app\uninstall.ps1`，并比对源文件与发行文件 SHA-256。
+- `scripts/install.ps1`：安装验证阶段检查已部署的 `uninstall.ps1` 必须存在。
+- `scripts/uninstall.ps1`：新增 Windows PowerShell 卸载脚本，按安装标记识别 LCMD 管理范围，并在删除前执行安全校验和用户确认。
+- `src/lcmd/core/knowledge_integrity.py`：完整性 Manifest 的 `main_prerelease` 字段允许稳定版使用空字符串；非空值仍须符合预发布版本格式。
+- `tests/test_install_marker.py`：覆盖安装标记校验、旧标记兼容、管理路径不匹配和重复 JSON key。
+- `tests/test_knowledge_integrity.py`：新增稳定版空预发布标识的完整性 Manifest 验证测试。
+- `tests/test_uninstall_ps1.py`：Windows PowerShell 集成测试，覆盖 WhatIf、取消、无效标记拒绝及 LCMD 管理范围删除。
+- `tests/test_uninstall_script.py`：Linux Bash 集成测试，覆盖管理范围删除、无效标记、异常 profile 配置和取消行为。
+
+### 自动化测试与质量检查
+
+用户在 Windows 11 开发环境实际执行：
+
+- 全量 pytest：`323 passed, 10 skipped`，0 failed。跳过项包括当前 Windows 环境不支持的符号链接/FIFO 测试，以及仅适用于 Linux Bash 的卸载集成测试。
+- Ruff 定向检查：`ruff check scripts src tests`，`All checks passed!`。
+- 全量 `ruff check .` 最终也报告 `All checks passed!`，但扫描仓库临时目录时出现两条访问拒绝 warning；因此以源码和测试目录的定向 Ruff 检查作为本轮明确的干净检查结果。
+- `git diff --check` 和 `git diff --cached --check` 均通过。Git 提示部分 LF 行尾将在后续操作时转换为 CRLF，这是当前 `core.autocrlf=true` 环境下的换行符提示，不是补丁空白错误。
+- 仓库内旧 pytest 临时目录 `.pytest-temp-no-update/` 与 `.pytest-temp/` 保留，未纳入提交，也未执行清理。
+
+### 提交与远程状态
+
+- 提交：`bd6b9a8`（`feat: add cross-platform uninstall support`）。
+- 仅提交上述 8 个文件，共新增 923 行、删除 1 行。
+- 用户执行 `git push origin main` 成功；远程 `main` 从 `dbccba0` 前进至 `bd6b9a8`。
+
+**任务结论与边界：** Windows beta.10 的真实安装、CLI 和真实卸载验收已完成；跨平台卸载脚本、发行包部署检查、安装标记测试及稳定版完整性 Manifest 兼容修复已提交并推送。Windows 全量 pytest 为 323 passed、10 skipped，Ruff 对 `scripts`、`src`、`tests` 定向检查通过。Linux Bash 卸载集成测试在本轮 Windows 环境中按预期跳过；Linux beta.10 的真实卸载验收已在 6.26 单独记录。本轮不代表已创建新的 GitHub Release，也不代表正式版本发布准备完成；后续仍需推进知识库内容准确性抽查、安装/升级文档完善和正式发布准备。
