@@ -3204,7 +3204,7 @@ Windows 验收（用户本地实际执行）：
 - 提交 `26fcb67`（`fix(test): make pytest configuration cross-platform`）已推送至 `origin/main`，远程分支从 `277d4b8` 前进至 `26fcb67`。
 - 本次提交仅包含 `pyproject.toml` 和 `tests/test_path_security.py`。
 
-**任务结论与边界：** Windows 全量自动化测试及 Ruff 检查通过；junction 测试已明确限定 Windows 平台，pytest 临时目录已采用跨平台仓库外路径配置。Linux Mint 尚未针对提交 `26fcb67` 重新运行全量测试，因此不能宣称 Linux 验收完成。下一步同步主程序至 `26fcb67)，在 Linux Mint 重新运行全量 pytest，并完成 Renderer 横向布局专项显示验收。
+**任务结论与边界：** Windows 全量自动化测试及 Ruff 检查通过；junction 测试已明确限定 Windows 平台，pytest 临时目录已采用跨平台仓库外路径配置。Linux Mint 尚未针对提交 `26fcb67` 重新运行全量测试，因此不能宣称 Linux 验收完成。下一步同步主程序至 `26fcb67`，在 Linux Mint 重新运行全量 pytest，并完成 Renderer 横向布局专项显示验收。
 
 ## 16. 新功能开发前的代码定位规则
 
