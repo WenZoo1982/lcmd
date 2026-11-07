@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -280,8 +281,8 @@ def test_validate_migration_target_rejects_symlink_in_parent(tmp_path):
 
 
 @pytest.mark.skipif(
-    not hasattr(Path, "is_junction"),
-    reason="当前 Python 版本不提供 Path.is_junction",
+    sys.platform != "win32" or not hasattr(Path, "is_junction"),
+    reason="该测试仅适用于支持 Path.is_junction 的 Windows 环境",
 )
 def test_validate_migration_target_rejects_junction(tmp_path):
     source = create_knowledge(tmp_path / "source")
