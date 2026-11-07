@@ -8,7 +8,7 @@
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
 - 当前代码基线：主程序 `main` 分支，最新代码提交 `26fcb67`（`fix(test): make pytest configuration cross-platform`）；本次修复基于 Renderer 横向显示提交 `29c7bd0`，此前 CLI 中英文帮助系统提交为 `eb7ab15`。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
-- 当前阶段：自动更新功能已取消；Windows 发行包已完成构建、安装及 CLI 真实验收。CLI 中英文帮助系统已实现并完成自动化测试，详细记录见 6.22；Renderer 子命令横向布局已完成 Windows 验收，见 6.23；pytest 跨平台配置及 junction 测试平台判断已修复，Windows 全量测试通过，见 6.24。当前下一步是在 Linux Mint 重新同步并复测全量测试及 Renderer 显示。阶段一剩余工作为核对知识库规范并补充 Linux、Windows PowerShell、Git/SSH/Docker 等命令文档；阶段二为 Linux 打包、安装部署与 Linux Mint 测试；阶段三为跨平台最终验收、文档完善和正式发布准备。以上后续事项按各自验收证据标记状态。当前版本通过 GitHub Releases 手动下载发行包，运行 `install.ps1` 安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
+- 当前阶段：自动更新功能已取消；Windows 发行包已完成构建、安装及 CLI 真实验收。CLI 中英文帮助系统已实现并完成自动化测试，详细记录见 6.22；Renderer 子命令横向布局已完成 Windows 与 Linux Mint 双平台验收，见 6.23；pytest 跨平台配置及 junction 测试平台判断已修复，Windows 与 Linux Mint 全量测试均通过，见 6.24。Renderer 横向布局及本轮 pytest 跨平台修复的自动化测试、Ruff 检查和 Linux 实际终端显示验收均已完成。阶段一剩余工作为核对知识库规范并补充 Linux、Windows PowerShell、Git/SSH/Docker 等命令文档；阶段二为 Linux 打包、安装部署与 Linux Mint 测试；阶段三为跨平台最终验收、文档完善和正式发布准备。以上后续事项按各自验收证据标记状态。当前版本通过 GitHub Releases 手动下载发行包，运行 `install.ps1` 安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；此前曾作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
 
@@ -3178,7 +3178,7 @@ CLI 帮助系统（已完成本轮帮助实现，后续仍需随 CLI 功能变�
 - Git 暂存区经 `git diff --cached --check` 检查通过；本次提交仅包含 `src/lcmd/output/renderer.py`。
 - 提交 `29c7bd0`（`feat(renderer): display subcommands horizontally`）已推送至 `origin/main`；用户终端确认远程分支从 `3078604` 前进至 `29c7bd0`。
 
-**任务结论与边界：** Windows 环境下的 Renderer 定向自动化测试、Ruff 检查及 `lcmd git` 实际输出验收已完成并推送。Linux 环境尚未进行本次修改的实际显示验收，也未据此宣称 Linux 平台整体测试通过。下一步先将主程序和知识库最新内容同步到 Linux Mint 22.3，再进行 Linux 基础功能回归及本次 Renderer 显示专项验收；Linux 发行包安装验收另行安排。
+**任务结论与边界：** Renderer 横向多列布局已完成 Windows 与 Linux Mint 双平台验收。Windows 的 `tests/test_renderer.py` 16 项通过，Ruff 定向检查通过；实际 `lcmd git` 输出在约 120 列终端宽度下呈现横向多列，长命令名称完整显示。Linux Mint 22.3 同步主程序和知识库后，`tests/test_renderer.py` 16 项通过，Ruff 全量检查 `All checks passed!`；实际终端尺寸为 33 行 × 125 列，`lcmd git` 输出中可用子命令按横向多列排列，长命令名称完整显示，面板边框及颜色正常。Renderer 专项显示验收完成；Linux 发行包安装验收另行安排。
 
 
 ## 6.24 pytest 跨平台测试配置与 junction 测试修复（提交 `26fcb67`）
@@ -3204,7 +3204,16 @@ Windows 验收（用户本地实际执行）：
 - 提交 `26fcb67`（`fix(test): make pytest configuration cross-platform`）已推送至 `origin/main`，远程分支从 `277d4b8` 前进至 `26fcb67`。
 - 本次提交仅包含 `pyproject.toml` 和 `tests/test_path_security.py`。
 
-**任务结论与边界：** Windows 全量自动化测试及 Ruff 检查通过；junction 测试已明确限定 Windows 平台，pytest 临时目录已采用跨平台仓库外路径配置。Linux Mint 尚未针对提交 `26fcb67` 重新运行全量测试，因此不能宣称 Linux 验收完成。下一步同步主程序至 `26fcb67`，在 Linux Mint 重新运行全量 pytest，并完成 Renderer 横向布局专项显示验收。
+**Linux Mint 验收（用户本地实际执行）：**
+
+- 主程序同步至 `49d2cf2`，知识库同步至 `2bed3c1`；两个仓库均与 `origin/main` 一致，工作区干净。
+- Python `3.12.3`，pytest `9.2.0`；全项目 pytest：`305 passed, 1 skipped, 0 failed`，共收集 306 项，耗时 1.24 秒。
+- `tests/test_path_security.py` 中 Windows 专用 junction 测试正确跳过，提示为“该测试仅适用于支持 Path.is_junction 的 Windows 环境”；其余路径安全测试通过。
+- `tests/test_renderer.py`：16 项全部通过。
+- Ruff 全量检查：`All checks passed!`。
+- 实际 `lcmd git` 在 125 列终端宽度下显示横向多列可用子命令，长命令名称完整显示。
+
+**任务结论与边界：** pytest 跨平台配置和 junction 测试平台判断修复已完成 Windows 与 Linux Mint 双平台验证。Windows 全量 pytest 为 `300 passed, 6 skipped`；Linux Mint 全量 pytest 为 `305 passed, 1 skipped`。两个平台的 Ruff 检查均通过；Linux 的 `.pytest_cache` 与旧临时目录问题不属于本轮 Linux 测试失败，本轮 Linux 全量测试无 warning。Renderer 横向布局也已完成双平台实际显示验收，详见 6.23。Linux 发行包安装验收仍未完成，不得将其标记为已验收。
 
 ## 16. 新功能开发前的代码定位规则
 
