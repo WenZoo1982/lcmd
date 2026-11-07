@@ -7,7 +7,7 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `eb7ab15`（`feat: add localized CLI help system`）。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
+- 当前代码基线：主程序 `main`` 分支，最新代码提交 `29c7bd0`（`feat(renderer): display subcommands horizontally`）；此前 CLI 中英文帮助系统提交为 `eb7ab15`。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
 - 当前阶段：自动更新功能已取消；Windows 发行包已完成构建、安装及 CLI 真实验收。CLI 中英文帮助系统已实现并完成自动化测试，详细记录见 6.22；阶段一剩余工作为核对知识库规范并补充 Linux、Windows PowerShell、Git/SSH/Docker 等命令文档。阶段二为 Linux 打包、安装部署与 Linux Mint 测试；阶段三为跨平台最终验收、文档完善和正式发布准备。以上后续事项按各自验收证据标记状态。当前版本通过 GitHub Releases 手动下载发行包，运行 `install.ps1` 安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；此前曾作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
@@ -3159,6 +3159,26 @@ CLI 帮助系统（已完成本轮帮助实现，后续仍需随 CLI 功能变�
 - 本次提交仅包含 `src/lcmd/cli/app.py`、`src/lcmd/cli/help.py`、`src/lcmd/main.py`、`tests/test_cli.py`、`tests/test_help.py` 五个文件；未跟踪的 pytest 临时目录和安装脚本备份文件未纳入提交。
 
 **任务结论与边界：** CLI 主帮助和 search 帮助的中英文实现、语言选择及基础自动化测试已完成并推送。错误提示的全面本地化、未来新增命令/参数的帮助维护，以及阶段一知识库内容扩充仍未完成；不得将阶段一整体标记为完成。
+
+
+## 6.23 Renderer 可用子命令横向排列（提交 `29c7bd0`）
+
+用户提出缩短“可用子命令”区域的纵向占屏长度。本轮仅调整终端渲染方式，不修改知识库内容、查询逻辑、子命令发现逻辑或数据模型。
+
+实现文件：
+
+- `src/lcmd/output/renderer.py`：引入 Rich `Columns` 和 `Text`，将原先逐行显示子命令的单列表格改为自适应横向多列布局，并使用 `Panel` 保留“可用子命令”标题及青色边框；子命令文本保持绿色。
+- 子命令顺序及查询结果不变；列数随终端可用宽度自适应，长命令名称完整显示并按布局换行。
+
+测试与质量检查（用户本地实际执行）：
+
+- `tests/test_renderer.py`：16 passed。
+- Ruff 定向检查：`src/lcmd/output/renderer.py` 与 `tests/test_renderer.py`，`All checks passed!`。
+- 使用实际构建环境运行 `lcmd git`：退出码 0；在约 120 列终端宽度下，子命令以横向多列显示，约每行 5 项，长命令名称完整显示。
+- Git 暂存区经 `git diff --cached --check` 检查通过；本次提交仅包含 `src/lcmd/output/renderer.py`。
+- 提交 `29c7bd0`（`feat(renderer): display subcommands horizontally`）已推送至 `origin/main`；用户终端确认远程分支从 `3078604` 前进至 `29c7bd0`。
+
+**任务结论与边界：** Windows 环境下的 Renderer 定向自动化测试、Ruff 检查及 `lcmd git` 实际输出验收已完成并推送。Linux 环境尚未进行本次修改的实际显示验收，也未据此宣称 Linux 平台整体测试通过。下一步先将主程序和知识库最新内容同步到 Linux Mint 22.3，再进行 Linux 基础功能回归及本次 Renderer 显示专项验收；Linux 发行包安装验收另行安排。
 
 ## 16. 新功能开发前的代码定位规则
 
