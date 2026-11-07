@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `29c7bd0`（`feat(renderer): display subcommands horizontally`）；此前 CLI 中英文帮助系统提交为 `eb7ab15`。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
-- 当前阶段：自动更新功能已取消；Windows 发行包已完成构建、安装及 CLI 真实验收。CLI 中英文帮助系统已实现并完成自动化测试，详细记录见 6.22；阶段一剩余工作为核对知识库规范并补充 Linux、Windows PowerShell、Git/SSH/Docker 等命令文档。阶段二为 Linux 打包、安装部署与 Linux Mint 测试；阶段三为跨平台最终验收、文档完善和正式发布准备。以上后续事项按各自验收证据标记状态。当前版本通过 GitHub Releases 手动下载发行包，运行 `install.ps1` 安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `26fcb67`（`fix(test): make pytest configuration cross-platform`）；本次修复基于 Renderer 横向显示提交 `29c7bd0`，此前 CLI 中英文帮助系统提交为 `eb7ab15`。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
+- 当前阶段：自动更新功能已取消；Windows 发行包已完成构建、安装及 CLI 真实验收。CLI 中英文帮助系统已实现并完成自动化测试，详细记录见 6.22；Renderer 子命令横向布局已完成 Windows 验收，见 6.23；pytest 跨平台配置及 junction 测试平台判断已修复，Windows 全量测试通过，见 6.24。当前下一步是在 Linux Mint 重新同步并复测全量测试及 Renderer 显示。阶段一剩余工作为核对知识库规范并补充 Linux、Windows PowerShell、Git/SSH/Docker 等命令文档；阶段二为 Linux 打包、安装部署与 Linux Mint 测试；阶段三为跨平台最终验收、文档完善和正式发布准备。以上后续事项按各自验收证据标记状态。当前版本通过 GitHub Releases 手动下载发行包，运行 `install.ps1` 安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；此前曾作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
 
@@ -3179,6 +3179,32 @@ CLI 帮助系统（已完成本轮帮助实现，后续仍需随 CLI 功能变�
 - 提交 `29c7bd0`（`feat(renderer): display subcommands horizontally`）已推送至 `origin/main`；用户终端确认远程分支从 `3078604` 前进至 `29c7bd0`。
 
 **任务结论与边界：** Windows 环境下的 Renderer 定向自动化测试、Ruff 检查及 `lcmd git` 实际输出验收已完成并推送。Linux 环境尚未进行本次修改的实际显示验收，也未据此宣称 Linux 平台整体测试通过。下一步先将主程序和知识库最新内容同步到 Linux Mint 22.3，再进行 Linux 基础功能回归及本次 Renderer 显示专项验收；Linux 发行包安装验收另行安排。
+
+
+## 6.24 pytest 跨平台测试配置与 junction 测试修复（提交 `26fcb67`）
+
+用户完成 Windows 与 Linux Mint 跨平台验收时，发现 Linux Python 3.12 提供 `Path.is_junction()`，但 junction 测试仍无条件尝试调用 Windows 专用的 `cmd /c mklink /J`，导致 Linux 测试失败。该问题属于测试平台判断错误，不是产品路径安全代码缺陷。
+
+本轮修复文件：
+
+- `tests/test_path_security.py`：引入 `sys`，将 junction 测试限定为 `sys.platform == "win32"` 且当前 Python 提供 `Path.is_junction` 时执行；Linux 不再调用 Windows 专用命令。
+- `pyproject.toml`：在 pytest 的 `addopts` 中加入 `--basetemp=../.lcmd-pytest`，统一将 pytest 临时目录放在仓库目录外，避免使用 Windows 用户临时目录时遇到的访问权限问题，也避免测试临时目录进入知识库路径安全保护范围。使用 `addopts` 传递参数；不能将 `basetemp` 写成 `[tool.pytest.ini_options]` 的独立配置项，因为 pytest 9.2.0 会将其报告为未知配置选项。
+
+Windows 验收（用户本地实际执行）：
+
+- 定向 `tests/test_path_security.py`：22 passed、2 skipped。
+- 全项目 pytest：`300 passed, 6 skipped, 0 failed`，共收集 306 项。
+- Ruff 全项目检查：`All checks passed!`；扫描过程中对旧临时目录出现两条访问拒绝 warning，但不影响检查通过。
+- `git diff --check`：通过。
+- 固定临时目录 `D:\\Project_DEV\\.lcmd-pytest` 已验证可创建和写入；pytest 全量运行不再访问默认用户 Temp 目录。
+- pytest 仍报告一条独立的 `.pytest_cache` 写入 warning（WinError 183，缓存目录已存在）；这不是测试失败，尚未处理。旧的 `.pytest-temp`、`.pytest-temp-no-update` 和安装脚本备份均保留，未纳入提交或清理。
+
+提交与远程状态：
+
+- 提交 `26fcb67`（`fix(test): make pytest configuration cross-platform`）已推送至 `origin/main`，远程分支从 `277d4b8` 前进至 `26fcb67`。
+- 本次提交仅包含 `pyproject.toml` 和 `tests/test_path_security.py`。
+
+**任务结论与边界：** Windows 全量自动化测试及 Ruff 检查通过；junction 测试已明确限定 Windows 平台，pytest 临时目录已采用跨平台仓库外路径配置。Linux Mint 尚未针对提交 `26fcb67` 重新运行全量测试，因此不能宣称 Linux 验收完成。下一步同步主程序至 `26fcb67)，在 Linux Mint 重新运行全量 pytest，并完成 Renderer 横向布局专项显示验收。
 
 ## 16. 新功能开发前的代码定位规则
 
