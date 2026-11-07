@@ -1,4 +1,5 @@
 
+import json
 import warnings
 from pathlib import Path
 from types import SimpleNamespace
@@ -950,6 +951,137 @@ def test_path_migration_progress_callback_is_executed(cli_mocks):
 
     assert result.exit_code == 0
     assert "迁移成功" in result.output
+
+
+def test_internal_validate_install_marker_succeeds(
+    monkeypatch,
+    tmp_path,
+    capsys,
+):
+    data_dir = tmp_path / "lcmd"
+    data_dir.mkdir()
+    marker_file = data_dir / ".lcmd-install.json"
+    marker_file.write_text(
+        json.dumps(
+            {
+                "product": "WenZoo.LCMD",
+                "marker_version": 1,
+                "main_version": "0.1.0",
+                "app_dir": str(data_dir / "app"),
+                "knowledge_dir": str(data_dir / "knowledge"),
+                "uninstall_file": str(data_dir / "uninstall.sh"),
+                "install_state": "complete",
+            }
+        ),
+        encoding="utf-8",
+    )
+    create_app = Mock()
+    monkeypatch.setattr(main_module, "create_app", create_app)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "lcmd",
+            "--internal-validate-install-marker",
+            str(marker_file),
+            str(data_dir),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_module.main()
+
+    assert exc_info.value.code == 0
+    assert "LCMD_INSTALL_MARKER=OK" in capsys.readouterr().out
+    create_app.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("product", "Other.Product"),
+        ("marker_version", True),
+        ("main_version", "invalid"),
+        ("app_dir", "/unexpected/app"),
+        ("knowledge_dir", "/unexpected/knowledge"),
+        ("uninstall_file", "/unexpected/uninstall.sh"),
+        ("install_state", []),
+        ("__extra__", True),
+        ("__missing__", None),
+    ],
+)
+def test_internal_validate_install_marker_rejects_invalid_data(
+    monkeypatch,
+    tmp_path,
+    capsys,
+    field,
+    value,
+):
+    data_dir = tmp_path / "lcmd"
+    data_dir.mkdir()
+    marker_file = data_dir / ".lcmd-install.json"
+    marker_data = {
+        "product": "WenZoo.LCMD",
+        "marker_version": 1,
+        "main_version": "0.1.0",
+        "app_dir": str(data_dir / "app"),
+        "knowledge_dir": str(data_dir / "knowledge"),
+        "uninstall_file": str(data_dir / "uninstall.sh"),
+        "install_state": "complete",
+    }
+
+    if field == "__extra__":
+        marker_data["unexpected"] = value
+    elif field == "__missing__":
+        marker_data.pop("app_dir")
+    else:
+        marker_data[field] = value
+
+    marker_file.write_text(json.dumps(marker_data), encoding="utf-8")
+    create_app = Mock()
+    monkeypatch.setattr(main_module, "create_app", create_app)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "lcmd",
+            "--internal-validate-install-marker",
+            str(marker_file),
+            str(data_dir),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_module.main()
+
+    error_output = capsys.readouterr().err
+    assert exc_info.value.code == 1
+    assert "LCMD_INSTALL_MARKER=ERROR" in error_output
+    create_app.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--internal-validate-install-marker"],
+        ["--internal-validate-install-marker", "marker.json"],
+        ["--internal-validate-install-marker", "marker.json", ""],
+        ["--internal-validate-install-marker", "marker.json", "data", "extra"],
+    ],
+)
+def test_internal_validate_install_marker_rejects_invalid_arguments(
+    monkeypatch,
+    capsys,
+    arguments,
+):
+    create_app = Mock()
+    monkeypatch.setattr(main_module, "create_app", create_app)
+    monkeypatch.setattr("sys.argv", ["lcmd", *arguments])
+
+    with pytest.raises(SystemExit) as exc_info:
+        main_module.main()
+
+    assert exc_info.value.code == 2
+    assert "用法：" in capsys.readouterr().err
+    create_app.assert_not_called()
 
 
 def test_internal_validate_config_succeeds(monkeypatch, tmp_path, capsys):
