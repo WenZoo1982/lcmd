@@ -7,8 +7,8 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `5a92f1c`（`fix(test): make pytest configuration cross-platform`）；本次修复基于 Renderer 横向显示提交 `29c7bd0`，此前 CLI 中英文帮助系统提交为 `eb7ab15`。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
-- 当前阶段：自动更新功能已取消；Windows 发行包已完成构建、安装及 CLI 真实验收。CLI 中英文帮助系统、Renderer 横向多列布局及 pytest 跨平台修复均已完成对应自动化测试；Renderer 与 pytest 修复已完成 Windows/Linux Mint 双平台验收，详见 6.22–6.24。知识库已扩充至 578 篇 Markdown 文档，目录调整和 Front Matter 格式检查已完成，详见 6.25；后续仍需进行实际 CLI 查询覆盖、内容准确性抽查和正式版本发布准备。阶段二为 Linux 打包、安装部署与 Linux Mint 测试；阶段三为跨平台最终验收、文档完善和正式发布准备。以上后续事项按各自验收证据标记状态。当前版本通过 GitHub Releases 手动下载发行包，运行 `install.ps1` 安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `779a879`（`feat: add Linux build and installation support`）；此前已完成 CLI 中英文帮助系统（`eb7ab15`）、Renderer 横向多列布局（`29c7bd0`）及 pytest 跨平台修复（`26fcb67`）。Linux beta.10 构建、安装、CLI 使用和卸载验收已完成，详见 6.26。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行对应平台安装脚本完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
+- 当前阶段：自动更新功能已取消；Windows 与 Linux beta.10 发行包均已完成构建、安装和 CLI 真实验收。Linux Mint 22.3 的 beta.10 首次安装、版本/帮助/查询功能及卸载均已实际验收，详见 6.26。CLI 中英文帮助系统、Renderer 横向多列布局及 pytest 跨平台修复已完成对应自动化测试；Renderer 与 pytest 修复已完成 Windows/Linux Mint 双平台验收，详见 6.22–6.24。知识库已扩充至 578 篇 Markdown 文档，目录调整和 Front Matter 格式检查已完成，详见 6.25；仍需进行代表性 CLI 查询覆盖、内容准确性抽查和正式版本发布准备。阶段二 Linux 打包、安装部署与 Linux Mint 测试已完成；阶段三跨平台最终验收、文档完善和正式发布准备待推进。当前版本通过 GitHub Releases 手动下载发行包，运行对应平台安装脚本安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
 - 当前程序版本：`0.1.0`
 - 当前知识库 Manifest：`0.1.0`。知识库 `main` 分支已包含后续扩充内容（提交 `3ef4659`，共 578 篇 Markdown 文档）；稳定 Release `v0.1.0` 仍是此前发布的旧快照，新内容尚未创建新的版本化 Release。
 
@@ -3276,3 +3276,50 @@ Windows 验收（用户本地实际执行）：
 - 知识库提交 `3ef4659`（`docs: expand and reorganize command knowledge base`）已推送至 `origin/main`；最终状态 `main...origin/main`，工作区干净。
 
 **任务结论与边界：** 已确认此前“13 篇 integration fixtures”的判断不适用于当前本地知识库。当前远程主分支已同步 578 篇 Markdown 文档，全部通过基础 Front Matter/正文结构检查。该检查不等同于对每篇命令内容准确性、示例安全性或 CLI 实际查询结果的完整验收；仍需在正式发布前进行代表性查询测试、内容抽查，并更新 Manifest 版本及创建新的知识库 Release。Linux 发行包安装验收仍未完成。
+
+
+## 6.26 Linux beta.10 构建、安装、CLI 与卸载验收及代码推送（提交 `779a879`）
+
+用户在 Linux Mint 22.3 虚拟机中完成 Linux beta.10 发行构建、首次安装、CLI 使用和卸载验收，并将 Linux 平台实现推送至主程序仓库 `main` 分支。
+
+### Linux 发行构建
+
+- 主程序版本：`0.1.0`；预发布标识：`beta.10`；完整构建版本：`0.1.0-beta.10`。
+- 知识库版本：`0.1.0`；构建使用知识库 ZIP `lcmd-kb-0.1.0.zip`，SHA-256：`40678B849B388DE3C1D251E54238AAA8AACABC6D889BC0F6A05FCE6C0995DB61`。
+- 新增 Linux 构建脚本 `scripts/build-release-linux.sh`，负责校验知识库 ZIP 哈希、解压安全、Manifest 和知识库结构，调用 PyInstaller 构建 one-dir 发行包，并生成完整性清单及安装/卸载脚本。
+- 成功构建目录：`releases/lcmd-linux-0.1.0-beta.10`。发行目录包含主程序、依赖文件、知识库、`knowledge-integrity.json`、`install.sh` 和 `uninstall.sh`。
+- 构建过程中修正 PyInstaller `.spec` 与 `--noupx` 参数冲突后，构建成功。
+
+### Linux 安装与 CLI 验收
+
+- 新增 `scripts/install.sh`。首次安装真实执行 7 个阶段并全部成功；安装器部署主程序和官方知识库，初始化 Linux 配置及命令入口。
+- 首次安装曾因完整性清单 JSON key 后空格导致 sed 提取主程序版本失败；已修正正则以兼容空白，并通过 `bash -n` 语法检查，修复版同步到发行目录。
+- 安装后确认 `lcmd` 和 `lcmd-uninstall` 命令入口可用。
+- `lcmd --version` 正确显示主程序版本 `0.1.0` 和知识库版本 `0.1.0`；`lcmd --help` 正常。
+- 配置文件位于 `~/.config/lcmd/config.toml`，平台为 `linux`，语言为 `zh-CN`，知识库路径为 `~/.local/share/lcmd/knowledge`。
+- 实际查询 `lcmd git init`、`lcmd ls` 和 `lcmd search ls` 均正常。
+
+### Linux 卸载验收
+
+- 新增 `scripts/uninstall.sh`，并完成卸载范围、安全检查、安装身份标记、符号链接检查、Shell profile PATH block 处理及交互确认审查。
+- 用户明确确认后执行真实卸载，卸载成功删除 `~/.local/share/lcmd`、`~/.config/lcmd`、`~/.local/bin/lcmd` 和 `~/.local/bin/lcmd-uninstall`。
+- 未发现由安装器添加的 `.profile` PATH block，因此没有修改该文件；父目录保留。
+- 卸载验收以文件系统中的目标路径已删除为依据。首次卸载后 Bash 命令路径缓存仍显示旧路径属于 Shell 缓存现象，不代表文件仍存在。
+
+### 主程序仓库提交与推送
+
+本轮 Linux 代码提交范围严格限定为以下 5 个文件：
+
+- `src/lcmd/main.py`
+- `tests/test_cli.py`
+- `scripts/build-release-linux.sh`
+- `scripts/install.sh`
+- `scripts/uninstall.sh`
+
+- `releases/` 下的知识库 ZIP 和发行构建产物未纳入源码提交。
+- 执行 `git diff --check` 时发现 `src/lcmd/main.py` 存在 CRLF 行尾；统一该文件行尾后，工作区和暂存补丁格式检查均通过。
+- Linux 仓库此前未配置 Git 提交者身份；仅为当前仓库配置 `user.name=WenZoo1982` 和 `user.email=wen.zoo@outlook.com`，未修改全局 Git 配置，也未改变 GitHub 登录凭据。
+- 提交 `779a879`（`feat: add Linux build and installation support`）包含 5 个文件，共新增 1545 行。
+- 用户执行 `git push origin main` 成功；远程 `main` 从 `d921c98` 前进至 `779a879`。
+
+**任务结论与边界：** Linux beta.10 的构建、首次安装、版本/帮助/查询及卸载真实验收已完成；Linux 平台实现已推送至主程序仓库 `main` 分支。以上记录不代表 Linux beta.10 已创建 GitHub Release，也不代表正式版本发布准备完成。后续仍需推进跨平台最终验收、文档完善、知识库内容准确性抽查及正式发布准备。
