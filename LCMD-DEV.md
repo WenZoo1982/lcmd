@@ -7,10 +7,10 @@
 - Windows 主程序目录：`D:\Project_DEV\lcmd`
 - Windows 知识库目录：`D:\Project_DEV\lcmd-kb`
 - Linux Mint 测试目录：`~/lcmd`、`~/lcmd-kb`
-- 当前代码基线：主程序 `main` 分支，最新代码提交 `26fcb67`（`fix(test): make pytest configuration cross-platform`）；本次修复基于 Renderer 横向显示提交 `29c7bd0`，此前 CLI 中英文帮助系统提交为 `eb7ab15`。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
-- 当前阶段：自动更新功能已取消；Windows 发行包已完成构建、安装及 CLI 真实验收。CLI 中英文帮助系统已实现并完成自动化测试，详细记录见 6.22；Renderer 子命令横向布局已完成 Windows 与 Linux Mint 双平台验收，见 6.23；pytest 跨平台配置及 junction 测试平台判断已修复，Windows 与 Linux Mint 全量测试均通过，见 6.24。Renderer 横向布局及本轮 pytest 跨平台修复的自动化测试、Ruff 检查和 Linux 实际终端显示验收均已完成。阶段一剩余工作为核对知识库规范并补充 Linux、Windows PowerShell、Git/SSH/Docker 等命令文档；阶段二为 Linux 打包、安装部署与 Linux Mint 测试；阶段三为跨平台最终验收、文档完善和正式发布准备。以上后续事项按各自验收证据标记状态。当前版本通过 GitHub Releases 手动下载发行包，运行 `install.ps1` 安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
+- 当前代码基线：主程序 `main` 分支，最新代码提交 `5a92f1c`（`fix(test): make pytest configuration cross-platform`）；本次修复基于 Renderer 横向显示提交 `29c7bd0`，此前 CLI 中英文帮助系统提交为 `eb7ab15`。自动更新功能仍已彻底取消；当前版本不提供 `lcmd --update/-u`，用户通过 GitHub Releases 手动下载新版发行包，再运行包内 `install.ps1` 完成首次安装或升级。`src/lcmd/core/knowledge_files.py`、`core/migration.py` 和 `core/path_security.py` 仍保留，用于知识库文件安全与用户主动迁移。
+- 当前阶段：自动更新功能已取消；Windows 发行包已完成构建、安装及 CLI 真实验收。CLI 中英文帮助系统、Renderer 横向多列布局及 pytest 跨平台修复均已完成对应自动化测试；Renderer 与 pytest 修复已完成 Windows/Linux Mint 双平台验收，详见 6.22–6.24。知识库已扩充至 578 篇 Markdown 文档，目录调整和 Front Matter 格式检查已完成，详见 6.25；后续仍需进行实际 CLI 查询覆盖、内容准确性抽查和正式版本发布准备。阶段二为 Linux 打包、安装部署与 Linux Mint 测试；阶段三为跨平台最终验收、文档完善和正式发布准备。以上后续事项按各自验收证据标记状态。当前版本通过 GitHub Releases 手动下载发行包，运行 `install.ps1` 安装或升级。启动时先执行 `recover_migration()`，然后读取配置并加载知识库。
 - 当前程序版本：`0.1.0`
-- 当前知识库版本：`0.1.0`（`WenZoo1982/lcmd-kb` 的稳定 Release `v0.1.0`；此前曾作为在线更新机制开发与集成测试的稳定通道基线。当前内容仍为 13 篇 integration fixtures，不是完整正式命令目录；稳定 Release 状态不代表正式知识库内容验收完成）
+- 当前知识库 Manifest：`0.1.0`。知识库 `main` 分支已包含后续扩充内容（提交 `3ef4659`，共 578 篇 Markdown 文档）；稳定 Release `v0.1.0` 仍是此前发布的旧快照，新内容尚未创建新的版本化 Release。
 
 ---
 
@@ -3245,3 +3245,34 @@ Windows 验收（用户本地实际执行）：
 
 本表是定位入口，不意味着每项需求只修改表中一个文件。任何跨层需求都应沿调用链检查完整影响范围。
 
+
+
+## 6.25 知识库内容扩充与目录调整（知识库提交 `3ef4659`）
+
+用户明确指定以 Windows 本地目录 `D:\\Project_DEV\\lcmd-kb` 为知识库内容唯一准则。本轮对本地知识库进行盘点、格式检查，并将其当前内容同步至 `WenZoo1982/lcmd-kb` 的 `main` 分支。
+
+知识库远程同步：
+- 推送前执行 `git fetch origin`；本地分支原先与远程提交 `2bed3c1` 一致，变更均来自本地工作区。
+- 本地共有 578 篇 Markdown 文档，分布如下：
+
+| 类别 | 语言 | 文档数 |
+|---|---|---:|
+| Linux 平台命令 | zh-CN | 47 |
+| Linux 平台命令 | en-US | 47 |
+| Windows 平台命令 | zh-CN | 123 |
+| Windows 平台命令 | en-US | 102 |
+| Docker | zh-CN | 59 |
+| Docker | en-US | 58 |
+| Git | zh-CN | 62 |
+| Git | en-US | 62 |
+| SSH | zh-CN | 9 |
+| SSH | en-US | 9 |
+| **合计** | | **578** |
+
+- 知识库目录以当前本地内容为准：新增 `commands/platforms/windows/zh-CN/` 下 21 篇文档；移除旧 `commands/tools/cmd/` 下中英文共 64 篇文档。Windows 自带命令归入平台命令分类，不再保留独立的 `tools/cmd` 分类。
+- 对全部 578 篇 Markdown 文档执行 UTF-8 读取、TOML Front Matter 解析、非空 `summary` 检查、正文分隔符检查及正文非空检查，结果为 **0 项格式错误**。
+- 更新知识库仓库 README，删除“13 篇 integration fixtures”的过时描述，改为记录当前真实文档数量、分类分布、目录职责和文档格式。
+- `manifest.json` 保持 `0.1.0`，本轮未擅自修改知识库版本号；现有稳定 Release `v0.1.0` 不包含本轮扩充后的最新内容。后续正式发布前需确定新版本号并创建新的知识库 Release。
+- 知识库提交 `3ef4659`（`docs: expand and reorganize command knowledge base`）已推送至 `origin/main`；最终状态 `main...origin/main`，工作区干净。
+
+**任务结论与边界：** 已确认此前“13 篇 integration fixtures”的判断不适用于当前本地知识库。当前远程主分支已同步 578 篇 Markdown 文档，全部通过基础 Front Matter/正文结构检查。该检查不等同于对每篇命令内容准确性、示例安全性或 CLI 实际查询结果的完整验收；仍需在正式发布前进行代表性查询测试、内容抽查，并更新 Manifest 版本及创建新的知识库 Release。Linux 发行包安装验收仍未完成。
